@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock, TimerOff } from 'lucide-react';
 
 interface StudentDashboardProps {
@@ -8,7 +8,7 @@ interface StudentDashboardProps {
   onLogout?: () => void;
 }
 
-export default function StudentPage({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
+export default function StudentDashboard({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
   const [activities, setActivities] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -50,53 +50,32 @@ export default function StudentPage({ student, onSelectActivity, onLogout }: Stu
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dir-rtl font-sans pb-10">
-      {/* الهيدر العلوي */}
-      <header className="bg-emerald-800 text-white p-4 shadow-md">
-        <div className="max-w-5xl mx-auto flex justify-between items-center">
+    <div className="min-h-screen bg-slate-100 dir-rtl font-sans pb-10">
+      <main className="max-w-7xl mx-auto p-2 md:p-4">
+        {/* بيانات الطالب */}
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6 flex justify-between items-center">
           <div>
-            <h1 className="text-xl font-bold">منصة العلوم للأنشطة والواجبات التفاعلية</h1>
-            <p className="text-xs text-emerald-200 mt-1">
-              مدرسة أبو العاص بن الربيع ومتوسطة الربيع بن خثيم | عام 1448 هـ - توقيت أم القرى
+            <h2 className="text-lg font-black text-slate-800">أهلاً بك الطالب: {student?.full_name || student?.name}</h2>
+            <p className="text-xs text-slate-500 font-bold mt-1">
+              الصف الدراسي: {student?.classes?.name || student?.grade || 'الأول المتوسط'} | الهوية: {student?.national_id}
             </p>
           </div>
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <LogOut className="w-4 h-4" />
-              <span>تسجيل الخروج</span>
-            </button>
-          )}
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto p-4 mt-6">
-        {/* معلومات الطالب */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student?.name || student?.student_name}</h2>
-            <p className="text-sm text-gray-500 mt-1">
-              الصف الدراسي: {student?.grade || 'الأول المتوسط'} | الهوية: {student?.national_id}
-            </p>
-          </div>
-          <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-center">
-            <span className="text-xs block text-emerald-600 font-medium">الأنشطة المسلمة</span>
-            <span className="text-xl font-bold">{Object.keys(submissions).length} / {activities.length}</span>
+          <div className="bg-emerald-50 text-[#006837] border border-emerald-200 px-4 py-2 rounded-xl text-center">
+            <span className="text-xs block font-bold text-emerald-700">الأنشطة المسلمة</span>
+            <span className="text-xl font-black">{Object.keys(submissions).length} / {activities.length}</span>
           </div>
         </div>
 
         {/* قائمة الأنشطة المتاحة */}
-        <h3 className="text-md font-bold text-gray-700 mb-4 flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-emerald-600" />
+        <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
         </h3>
 
         {loading ? (
-          <div className="text-center py-10 text-gray-500">جاري تحميل الأنشطة...</div>
+          <div className="text-center py-10 text-slate-500 font-bold">جاري تحميل الأنشطة...</div>
         ) : activities.length === 0 ? (
-          <div className="bg-white rounded-xl p-8 text-center text-gray-500 shadow-sm border border-gray-100">
+          <div className="bg-white rounded-2xl p-8 text-center text-slate-400 font-bold shadow-sm border border-slate-200">
             لا توجد أنشطة متاحة حالياً.
           </div>
         ) : (
@@ -113,11 +92,11 @@ export default function StudentPage({ student, onSelectActivity, onLogout }: Stu
               const isExpired = now > dueDate;
 
               return (
-                <div key={activity.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
-                    <h4 className="font-bold text-gray-800">{activity.title}</h4>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <Clock className="w-3.5 h-3.5 text-gray-400" />
+                    <h4 className="font-bold text-slate-800">{activity.title}</h4>
+                    <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
+                      <Clock className="w-3.5 h-3.5 text-slate-400" />
                       <span>
                         موعد النهاية: {new Date(activity.due_date).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh', dateStyle: 'medium', timeStyle: 'short' })}
                       </span>
@@ -125,10 +104,10 @@ export default function StudentPage({ student, onSelectActivity, onLogout }: Stu
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {/* عرض حالة الدرجة أو الانتظار */}
+                    {/* عرض حالة الدرجة أو التصحيح */}
                     {isSubmitted && (
-                      <div className="flex items-center gap-1 bg-blue-50 text-blue-800 font-bold px-3 py-1 rounded-lg text-sm border border-blue-100">
-                        <CheckCircle className="w-4 h-4 text-blue-600" />
+                      <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />
                         <span>
                           {submission.score !== undefined && submission.score !== null
                             ? `الدرجة: ${submission.score} / ${activity.max_score || 10}`
@@ -137,48 +116,43 @@ export default function StudentPage({ student, onSelectActivity, onLogout }: Stu
                       </div>
                     )}
 
-                    {/* المنطق الصارم للشروط الخمسة */}
+                    {/* المنطق الصارم بالشروط الخمسة */}
                     {hasNotStarted ? (
-                      // 1. لم يبدأ بعد
                       <button
                         disabled
-                        className="flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                        className="flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-200 font-bold px-4 py-2 rounded-xl text-xs cursor-not-allowed"
                       >
                         <TimerOff className="w-4 h-4" />
                         <span>لم يبدأ الموعد بعد</span>
                       </button>
                     ) : isExpired && isSubmitted ? (
-                      // 2. انتهى الموعد + تم التسليم
                       <button
                         disabled
-                        className="flex items-center gap-1 bg-gray-100 text-gray-600 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                        className="flex items-center gap-1 bg-slate-100 text-slate-600 border border-slate-200 font-bold px-4 py-2 rounded-xl text-xs cursor-not-allowed"
                       >
                         <Lock className="w-4 h-4" />
                         <span>انتهى الموعد وتم التسليم</span>
                       </button>
                     ) : isExpired && !isSubmitted ? (
-                      // 3. انتهى الموعد + لم يتم التسليم
                       <button
                         disabled
-                        className="flex items-center gap-1 bg-red-50 text-red-600 border border-red-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                        className="flex items-center gap-1 bg-rose-50 text-rose-600 border border-rose-200 font-bold px-4 py-2 rounded-xl text-xs cursor-not-allowed"
                       >
                         <AlertCircle className="w-4 h-4" />
                         <span>انتهى الموعد ولم يتم التسليم</span>
                       </button>
                     ) : isSubmitted ? (
-                      // 4. الوقت متاح + تم التسليم (مغلق لمنع التعديل)
                       <button
                         disabled
-                        className="flex items-center gap-1 bg-gray-100 text-gray-500 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                        className="flex items-center gap-1 bg-slate-100 text-slate-500 border border-slate-200 font-bold px-4 py-2 rounded-xl text-xs cursor-not-allowed"
                       >
                         <Lock className="w-4 h-4" />
                         <span>تم التسليم (مغلق)</span>
                       </button>
                     ) : (
-                      // 5. الوقت متاح + لم يحل بعد
                       <button
                         onClick={() => onSelectActivity && onSelectActivity(activity)}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors shadow-sm"
+                        className="bg-[#006837] hover:bg-[#00522b] text-white font-extrabold px-5 py-2 rounded-xl text-xs transition-colors shadow-sm cursor-pointer"
                       >
                         بدء الحل
                       </button>
@@ -190,10 +164,6 @@ export default function StudentPage({ student, onSelectActivity, onLogout }: Stu
           </div>
         )}
       </main>
-
-      <footer className="mt-12 text-center text-xs text-gray-500 py-4 border-t border-gray-200">
-        إشراف المعلم: <span className="font-bold text-gray-700">عبدالعزيز آل فايع</span> | مدير المدرسة: <span className="font-bold text-gray-700">محمد الشهري</span>
-      </footer>
     </div>
   );
 }

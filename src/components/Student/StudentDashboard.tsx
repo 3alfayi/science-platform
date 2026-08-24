@@ -8,7 +8,7 @@ interface StudentDashboardProps {
   onLogout?: () => void;
 }
 
-export default function StudentDashboard({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
+export function StudentDashboard({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
   const [activities, setActivities] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -66,7 +66,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
           </div>
         </div>
 
-        {/* قائمة الأنشطة المتاحة */}
+        {/* قائمة الأنشطة والواجبات المتاحة */}
         <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
@@ -167,3 +167,5 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
     </div>
   );
 }
+
+export default StudentDashboard;

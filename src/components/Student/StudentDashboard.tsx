@@ -2,20 +2,9 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock } from 'lucide-react';
 
-interface StudentDashboardProps {
-  student: {
-    id: string;
-    name: string;
-    national_id: string;
-    grade?: string;
-  };
-  onSelectActivity: (activity: any) => void;
-  onLogout: () => void;
-}
-
-export default function StudentDashboard({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
-  const [activities, setActivities] = useState<any[]>([]);
-  const [submissions, setSubmissions] = useState<Record<string, any>>({});
+export default function StudentDashboard({ student, onSelectActivity, onLogout }) {
+  const [activities, setActivities] = useState([]);
+  const [submissions, setSubmissions] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -36,11 +25,11 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
       const { data: submissionsData, error: subError } = await supabase
         .from('submissions')
         .select('*')
-        .eq('student_id', student.id);
+        .eq('student_id', student?.id);
 
       if (subError) throw subError;
 
-      const subsMap: Record<string, any> = {};
+      const subsMap = {};
       submissionsData?.forEach((sub) => {
         subsMap[sub.activity_id] = sub;
       });
@@ -77,9 +66,9 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
       <main className="max-w-5xl mx-auto p-4 mt-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
           <div>
-            <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student.name}</h2>
+            <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student?.name || student?.student_name}</h2>
             <p className="text-sm text-gray-500 mt-1">
-              الصف الدراسي: {student.grade || 'الأول المتوسط'} | الهوية: {student.national_id}
+              الصف الدراسي: {student?.grade || 'الأول المتوسط'} | الهوية: {student?.national_id}
             </p>
           </div>
           <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-center">

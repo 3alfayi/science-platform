@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock } from 'lucide-react';
+import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock, TimerOff } from 'lucide-react';
 
 interface StudentDashboardProps {
   student: any;
@@ -51,6 +51,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
 
   return (
     <div className="min-h-screen bg-gray-50 dir-rtl font-sans pb-10">
+      {/* الهيدر العلوي */}
       <header className="bg-emerald-800 text-white p-4 shadow-md">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div>
@@ -70,6 +71,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
       </header>
 
       <main className="max-w-5xl mx-auto p-4 mt-6">
+        {/* بيانات الطالب */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student?.name || student?.student_name}</h2>
@@ -100,9 +102,12 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
               const submission = submissions[activity.id];
               const isSubmitted = submission && submission.score !== undefined && submission.score !== null;
 
-              const dueTimestamp = new Date(activity.due_date).getTime();
-              const nowTimestamp = Date.now();
-              const isExpired = nowTimestamp >= dueTimestamp;
+              const now = Date.now();
+              const startDate = activity.start_date ? new Date(activity.start_date).getTime() : 0;
+              const dueDate = new Date(activity.due_date).getTime();
+
+              const hasNotStarted = now < startDate;
+              const isExpired = now > dueDate;
 
               return (
                 <div key={activity.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -117,6 +122,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                   </div>
 
                   <div className="flex items-center gap-3">
+                    {/* عرض الدرجة عند التسليم */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-lg text-sm">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
@@ -124,7 +130,18 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                       </div>
                     )}
 
-                    {isSubmitted ? (
+                    {/* المنطق الحاسم حسب طلبك exact */}
+                    {hasNotStarted ? (
+                      // 1. لم يبدأ بعد
+                      <button
+                        disabled
+                        className="flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                      >
+                        <TimerOff className="w-4 h-4" />
+                        <span>لم يبدأ الموعد بعد</span>
+                      </button>
+                    ) : isSubmitted ? (
+                      // 2. تم التسليم (مغلق تماماً)
                       <button
                         disabled
                         className="flex items-center gap-1 bg-gray-100 text-gray-500 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
@@ -133,14 +150,16 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                         <span>تم التسليم (مغلق)</span>
                       </button>
                     ) : isExpired ? (
+                      // 3. انتهى ولم يتم التسليم
                       <button
                         disabled
-                        className="flex items-center gap-1 bg-gray-100 text-gray-400 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                        className="flex items-center gap-1 bg-red-50 text-red-600 border border-red-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
                       >
                         <AlertCircle className="w-4 h-4" />
-                        <span>انتهى موعد التسليم</span>
+                        <span>انتهى الموعد ولم يتم التسليم</span>
                       </button>
                     ) : (
+                      // 4. متاح للحل
                       <button
                         onClick={() => onSelectActivity(activity)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors shadow-sm"

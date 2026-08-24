@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase'; // تعديل المسار حسب المجلد لديك
-import { Calendar, CheckCircle, Clock, AlertCircle, LogOut } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock } from 'lucide-react';
 
 interface StudentDashboardProps {
   student: {
@@ -34,7 +34,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
 
       if (actError) throw actError;
 
-      // 2. جلب تسليمات الطالب الحالي
+      // 2. جلب تسليمات الطالب
       const { data: submissionsData, error: subError } = await supabase
         .from('submissions')
         .select('*')
@@ -78,7 +78,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
       </header>
 
       <main className="max-w-5xl mx-auto p-4 mt-6">
-        {/* كارت الطالب */}
+        {/* بيانات الطالب */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student.name}</h2>
@@ -110,10 +110,9 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
               const submission = submissions[activity.id];
               const isSubmitted = submission && submission.score !== undefined && submission.score !== null;
 
-              // معالجة صريحة للتواريخ بالأرقام المجردة لمنع مشاكل التوقيت العالمي UTC
-              const dueTime = new Date(activity.due_date).getTime();
-              const nowTime = new Date().getTime();
-              const isExpired = nowTime > dueTime;
+              const dueTimestamp = new Date(activity.due_date).getTime();
+              const nowTimestamp = Date.now();
+              const isExpired = nowTimestamp >= dueTimestamp;
 
               return (
                 <div key={activity.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -136,23 +135,27 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                       </div>
                     )}
 
-                    {/* زر الإجراء الصارم */}
-                    {isExpired ? (
+                    {/* المنطق الحاسم للأزرار */}
+                    {isSubmitted ? (
+                      // 1. إذا سلّم الطالب الإجابة: يغلق الزر تماماً حتى لو لم ينتهِ الوقت
                       <button
                         disabled
-                        className="flex items-center gap-1 bg-gray-100 text-gray-400 font-medium px-4 py-2 rounded-lg cursor-not-allowed text-sm border border-gray-200"
+                        className="flex items-center gap-1 bg-gray-100 text-gray-500 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                      >
+                        <Lock className="w-4 h-4" />
+                        <span>تم التسليم (مغلق)</span>
+                      </button>
+                    ) : isExpired ? (
+                      // 2. إذا لم يسلم وانتهى الوقت: يظهر تم انتهاء الموعد
+                      <button
+                        disabled
+                        className="flex items-center gap-1 bg-red-50 text-red-500 border border-red-100 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
                       >
                         <AlertCircle className="w-4 h-4" />
                         <span>انتهى موعد التسليم</span>
                       </button>
-                    ) : isSubmitted ? (
-                      <button
-                        onClick={() => onSelectActivity(activity)}
-                        className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-medium px-4 py-2 rounded-lg text-sm transition-colors"
-                      >
-                        تعديل الحل
-                      </button>
                     ) : (
+                      // 3. إذا لم يسلم والوقت متاح: يظهر بدء الحل فقط
                       <button
                         onClick={() => onSelectActivity(activity)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors shadow-sm"

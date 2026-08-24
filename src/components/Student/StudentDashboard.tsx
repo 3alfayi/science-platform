@@ -1,14 +1,14 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase } from '../lib/supabase';
 import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock, TimerOff } from 'lucide-react';
 
 interface StudentDashboardProps {
   student: any;
-  onSelectActivity: (activity: any) => void;
-  onLogout: () => void;
+  onSelectActivity?: (activity: any) => void;
+  onLogout?: () => void;
 }
 
-export default function StudentDashboard({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
+export default function StudentPage({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
   const [activities, setActivities] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -51,6 +51,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
 
   return (
     <div className="min-h-screen bg-gray-50 dir-rtl font-sans pb-10">
+      {/* الهيدر العلوي */}
       <header className="bg-emerald-800 text-white p-4 shadow-md">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div>
@@ -59,17 +60,20 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
               مدرسة أبو العاص بن الربيع ومتوسطة الربيع بن خثيم | عام 1448 هـ - توقيت أم القرى
             </p>
           </div>
-          <button
-            onClick={onLogout}
-            className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>تسجيل الخروج</span>
-          </button>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
+              <span>تسجيل الخروج</span>
+            </button>
+          )}
         </div>
       </header>
 
       <main className="max-w-5xl mx-auto p-4 mt-6">
+        {/* معلومات الطالب */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student?.name || student?.student_name}</h2>
@@ -83,6 +87,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
           </div>
         </div>
 
+        {/* قائمة الأنشطة المتاحة */}
         <h3 className="text-md font-bold text-gray-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-emerald-600" />
           قائمة الأنشطة والواجبات المتاحة
@@ -98,7 +103,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
           <div className="space-y-4">
             {activities.map((activity) => {
               const submission = submissions[activity.id];
-              const isSubmitted = submission && submission.score !== undefined && submission.score !== null;
+              const isSubmitted = submission !== undefined && submission !== null;
 
               const now = Date.now();
               const startDate = activity.start_date ? new Date(activity.start_date).getTime() : 0;
@@ -120,15 +125,19 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {/* عرض الدرجة عند التسليم */}
+                    {/* عرض حالة الدرجة أو الانتظار */}
                     {isSubmitted && (
-                      <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-lg text-sm">
-                        <CheckCircle className="w-4 h-4 text-emerald-600" />
-                        <span>الدرجة: {submission.score} / {activity.max_score || 10}</span>
+                      <div className="flex items-center gap-1 bg-blue-50 text-blue-800 font-bold px-3 py-1 rounded-lg text-sm border border-blue-100">
+                        <CheckCircle className="w-4 h-4 text-blue-600" />
+                        <span>
+                          {submission.score !== undefined && submission.score !== null
+                            ? `الدرجة: ${submission.score} / ${activity.max_score || 10}`
+                            : 'تم التسليم (بانتظار التصحيح)'}
+                        </span>
                       </div>
                     )}
 
-                    {/* المنطق الصارم والشامل للمشرع */}
+                    {/* المنطق الصارم للشروط الخمسة */}
                     {hasNotStarted ? (
                       // 1. لم يبدأ بعد
                       <button
@@ -168,7 +177,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                     ) : (
                       // 5. الوقت متاح + لم يحل بعد
                       <button
-                        onClick={() => onSelectActivity(activity)}
+                        onClick={() => onSelectActivity && onSelectActivity(activity)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors shadow-sm"
                       >
                         بدء الحل

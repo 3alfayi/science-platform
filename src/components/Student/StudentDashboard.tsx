@@ -1,18 +1,17 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Calendar, CheckCircle, Clock, AlertCircle, Lock, TimerOff } from 'lucide-react';
-import InteractivePdfViewer from './InteractivePdfViewer';
 
 interface StudentDashboardProps {
   student: any;
+  onSelectActivity?: (activity: any) => void;
   onLogout?: () => void;
 }
 
-export function StudentDashboard({ student }: StudentDashboardProps) {
+export function StudentDashboard({ student, onSelectActivity }: StudentDashboardProps) {
   const [activities, setActivities] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
-  const [selectedActivity, setSelectedActivity] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
@@ -50,44 +49,21 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
     }
   };
 
-  const formatDate = (dateStr: string) => {
+  const formatDate = (dateStr: any) => {
     if (!dateStr) return 'غير محدد';
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return 'غير محدد';
     return d.toLocaleString('ar-SA', {
       timeZone: 'Asia/Riyadh',
-      dateStyle: 'medium',
+      dateStyle: 'short',
       timeStyle: 'short',
     });
   };
 
-  if (selectedActivity) {
-    return (
-      <div>
-        <button
-          onClick={() => {
-            setSelectedActivity(null);
-            fetchData();
-          }}
-          className="mb-4 bg-slate-800 text-white text-xs px-4 py-2 rounded-xl font-bold cursor-pointer hover:bg-slate-700"
-        >
-          ← العودة لقائمة الأنشطة
-        </button>
-        <InteractivePdfViewer
-          student={student}
-          activity={selectedActivity}
-          onClose={() => {
-            setSelectedActivity(null);
-            fetchData();
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="dir-rtl font-sans pb-10">
       <main className="max-w-7xl mx-auto p-2 md:p-4">
+        {/* بيانات الطالب */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-black text-slate-800">أهلاً بك الطالب: {student?.full_name || student?.name}</h2>
@@ -101,6 +77,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
           </div>
         </div>
 
+        {/* قائمة الأنشطة والواجبات المتاحة */}
         <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
@@ -120,10 +97,11 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
 
               const now = Date.now();
               const startDateMs = activity.start_date ? new Date(activity.start_date).getTime() : 0;
-              const dueDateMs = activity.due_date ? new Date(activity.due_date).getTime() : Infinity;
+              const dueDateMs = activity.due_date ? new Date(activity.due_date).getTime() : 0;
 
-              const hasNotStarted = now < startDateMs;
-              const isExpired = now > dueDateMs;
+              // فحص الشروط الزمانية الصارمة
+              const hasNotStarted = activity.start_date ? now < startDateMs : false;
+              const isExpired = activity.due_date ? now > dueDateMs : false;
 
               return (
                 <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -131,23 +109,20 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
                     <h4 className="font-bold text-slate-800 text-base">{activity.title}</h4>
                     
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 font-semibold">
-                      {activity.start_date && (
-                        <div className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200">
-                          <Clock className="w-3.5 h-3.5 text-amber-600" />
-                          <span>تاريخ البداية: {formatDate(activity.start_date)}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>تاريخ البداية: {formatDate(activity.start_date)}</span>
+                      </div>
 
-                      {activity.due_date && (
-                        <div className="flex items-center gap-1 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
-                          <Clock className="w-3.5 h-3.5 text-slate-500" />
-                          <span>موعد النهاية: {formatDate(activity.due_date)}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center gap-1 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <Clock className="w-3.5 h-3.5 text-slate-500" />
+                        <span>موعد النهاية: {formatDate(activity.due_date)}</span>
+                      </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
+                    {/* عرض حالة الدرجة */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
@@ -159,7 +134,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
                       </div>
                     )}
 
-                    {/* أزرار الحالات المطلوبة بصرامة دون خيار تعديل */}
+                    {/* الأزرار الصارمة حسب الشروط المطلوبة بالضبط */}
                     {hasNotStarted ? (
                       <button
                         disabled
@@ -194,7 +169,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
                       </button>
                     ) : (
                       <button
-                        onClick={() => setSelectedActivity(activity)}
+                        onClick={() => onSelectActivity && onSelectActivity(activity)}
                         className="bg-[#006837] hover:bg-[#00522b] text-white font-extrabold px-5 py-2 rounded-xl text-xs transition-colors shadow-sm cursor-pointer"
                       >
                         بدء الحل

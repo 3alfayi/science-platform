@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock, TimerOff } from 'lucide-react';
+import { Calendar, CheckCircle, Clock, AlertCircle, Lock, TimerOff } from 'lucide-react';
 
 interface StudentDashboardProps {
   student: any;
@@ -8,7 +8,7 @@ interface StudentDashboardProps {
   onLogout?: () => void;
 }
 
-export function StudentDashboard({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
+export function StudentDashboard({ student, onSelectActivity }: StudentDashboardProps) {
   const [activities, setActivities] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
@@ -49,29 +49,21 @@ export function StudentDashboard({ student, onSelectActivity, onLogout }: Studen
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-100 dir-rtl font-sans pb-10">
-      {/* الهيدر العلوي */}
-      <header className="bg-[#006837] text-white p-4 shadow-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="font-extrabold text-lg md:text-xl">منصة العلوم للأنشطة والواجبات التفاعلية</h1>
-            <p className="text-xs text-emerald-200 font-semibold">
-              مدرسة أبو العاص بن الربيع ومتوسطة الربيع بن خثيم | عام 1448 هـ - توقيت أم القرى
-            </p>
-          </div>
-          {onLogout && (
-            <button
-              onClick={onLogout}
-              className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
-            >
-              <LogOut className="w-4 h-4" /> تسجيل الخروج
-            </button>
-          )}
-        </div>
-      </header>
+  // دالة تنسيق التاريخ والوقت بأمان لمنع ظهور Invalid Date
+  const formatDate = (dateStr: any) => {
+    if (!dateStr) return 'غير محدد';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'غير محدد';
+    return d.toLocaleString('ar-SA', {
+      timeZone: 'Asia/Riyadh',
+      dateStyle: 'short',
+      timeStyle: 'short',
+    });
+  };
 
-      <main className="max-w-7xl mx-auto p-4 md:p-6">
+  return (
+    <div className="dir-rtl font-sans pb-10">
+      <main className="max-w-7xl mx-auto p-2 md:p-4">
         {/* بيانات الطالب */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6 flex justify-between items-center">
           <div>
@@ -86,7 +78,7 @@ export function StudentDashboard({ student, onSelectActivity, onLogout }: Studen
           </div>
         </div>
 
-        {/* قائمة الأنشطة المتاحة */}
+        {/* قائمة الأنشطة والواجبات المتاحة */}
         <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
@@ -106,20 +98,26 @@ export function StudentDashboard({ student, onSelectActivity, onLogout }: Studen
 
               const now = Date.now();
               const startDate = activity.start_date ? new Date(activity.start_date).getTime() : 0;
-              const dueDate = new Date(activity.due_date).getTime();
+              const dueDate = activity.due_date ? new Date(activity.due_date).getTime() : Infinity;
 
-              const hasNotStarted = now < startDate;
-              const isExpired = now > dueDate;
+              const hasNotStarted = activity.start_date ? now < startDate : false;
+              const isExpired = activity.due_date ? now > dueDate : false;
 
               return (
                 <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <h4 className="font-bold text-slate-800">{activity.title}</h4>
-                    <div className="flex items-center gap-2 text-xs text-slate-500 font-semibold">
-                      <Clock className="w-3.5 h-3.5 text-slate-400" />
-                      <span>
-                        موعد النهاية: {new Date(activity.due_date).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh', dateStyle: 'medium', timeStyle: 'short' })}
-                      </span>
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-semibold">
+                      {activity.start_date && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-amber-500" />
+                          <span>تاريخ البداية: {formatDate(activity.start_date)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>موعد النهاية: {formatDate(activity.due_date)}</span>
+                      </div>
                     </div>
                   </div>
 
@@ -184,10 +182,6 @@ export function StudentDashboard({ student, onSelectActivity, onLogout }: Studen
           </div>
         )}
       </main>
-
-      <footer className="text-center py-4 text-xs font-bold text-slate-500 border-t bg-white mt-12">
-        إشراف المعلم: <span className="text-[#006837]">عبدالعزيز آل فايع</span> | مدير المدرسة: <span className="text-[#006837]">محمد الشهري</span>
-      </footer>
     </div>
   );
 }

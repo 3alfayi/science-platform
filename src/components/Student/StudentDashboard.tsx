@@ -110,9 +110,10 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
               const submission = submissions[activity.id];
               const isSubmitted = submission && submission.score !== undefined && submission.score !== null;
 
-              const dueTimestamp = new Date(activity.due_date).getTime();
-              const nowTimestamp = Date.now();
-              const isExpired = nowTimestamp >= dueTimestamp;
+              // معالجة دقيقة للتاريخ والوقت بتوقيت السعودية ومنع مشاكل UTC
+              const dueDateObj = new Date(activity.due_date);
+              const nowObj = new Date();
+              const isExpired = nowObj >= dueDateObj;
 
               return (
                 <div key={activity.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -121,7 +122,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <Clock className="w-3.5 h-3.5 text-gray-400" />
                       <span>
-                        موعد النهاية: {new Date(activity.due_date).toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' })}
+                        موعد النهاية: {dueDateObj.toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh', dateStyle: 'medium', timeStyle: 'short' })}
                       </span>
                     </div>
                   </div>
@@ -135,9 +136,16 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                       </div>
                     )}
 
-                    {/* المنطق الحاسم للأزرار */}
-                    {isSubmitted ? (
-                      // 1. إذا سلّم الطالب الإجابة: يغلق الزر تماماً حتى لو لم ينتهِ الوقت
+                    {/* الزر المغلق عند انتهاء الوقت أو التسليم */}
+                    {isExpired ? (
+                      <button
+                        disabled
+                        className="flex items-center gap-1 bg-gray-100 text-gray-400 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        <span>انتهى موعد التسليم</span>
+                      </button>
+                    ) : isSubmitted ? (
                       <button
                         disabled
                         className="flex items-center gap-1 bg-gray-100 text-gray-500 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
@@ -145,17 +153,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                         <Lock className="w-4 h-4" />
                         <span>تم التسليم (مغلق)</span>
                       </button>
-                    ) : isExpired ? (
-                      // 2. إذا لم يسلم وانتهى الوقت: يظهر تم انتهاء الموعد
-                      <button
-                        disabled
-                        className="flex items-center gap-1 bg-red-50 text-red-500 border border-red-100 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
-                      >
-                        <AlertCircle className="w-4 h-4" />
-                        <span>انتهى موعد التسليم</span>
-                      </button>
                     ) : (
-                      // 3. إذا لم يسلم والوقت متاح: يظهر بدء الحل فقط
                       <button
                         onClick={() => onSelectActivity(activity)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors shadow-sm"

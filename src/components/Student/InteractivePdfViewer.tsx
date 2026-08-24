@@ -1,179 +1,172 @@
-import React, { useState, useRef } from 'react';
-import { Type, Check, X, Eraser, Send } from 'lucide-react';
-
-export interface Annotation {
-  id: string;
-  type: 'text' | 'check' | 'cross';
-  x: number;
-  y: number;
-  text?: string;
-}
+import { useState, useEffect } from 'react';
+import { supabase } from '../../lib/supabase';
+import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock } from 'lucide-react';
 
 interface InteractivePdfViewerProps {
-  pdfUrl: string;
-  activityTitle?: string;
-  onClose?: () => void;
-  onSaveAnswers: (annotations: Annotation[]) => Promise<void> | void;
-  loading?: boolean;
+  student: any;
+  onSelectActivity?: (activity: any) => void;
+  onLogout?: () => void;
 }
 
-export const InteractivePdfViewer: React.FC<InteractivePdfViewerProps> = ({
-  pdfUrl,
-  activityTitle = 'ورقة النشاط',
-  onClose,
-  onSaveAnswers,
-  loading = false,
-}) => {
-  const [activeTool, setActiveTool] = useState<'text' | 'check' | 'cross' | 'eraser'>('text');
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
-  const [textInput, setTextInput] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
+export default function InteractivePdfViewer({ student, onSelectActivity, onLogout }: InteractivePdfViewerProps) {
+  const [activities, setActivities] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<Record<string, any>>({});
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const handleContainerClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!containerRef.current || activeTool === 'eraser') return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+  useEffect(() => {
+    fetchData();
+  }, [student]);
 
-    if (activeTool === 'text') {
-      const newAnn: Annotation = {
-        id: Date.now().toString(),
-        type: 'text',
-        x,
-        y,
-        text: textInput.trim() || 'إجابة',
-      };
-      setAnnotations([...annotations, newAnn]);
-    } else if (activeTool === 'check' || activeTool === 'cross') {
-      const newAnn: Annotation = {
-        id: Date.now().toString(),
-        type: activeTool,
-        x,
-        y,
-      };
-      setAnnotations([...annotations, newAnn]);
-    }
-  };
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      const { data: activitiesData, error: actError } = await supabase
+        .from('activities')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  const handleRemoveAnnotation = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (activeTool === 'eraser') {
-      setAnnotations(annotations.filter((ann) => ann.id !== id));
+      if (actError) throw actError;
+
+      const { data: submissionsData, error: subError } = await supabase
+        .from('submissions')
+        .select('*')
+        .eq('student_id', student?.id);
+
+      if (subError) throw subError;
+
+      const subsMap: Record<string, any> = {};
+      submissionsData?.forEach((sub: any) => {
+        subsMap[sub.activity_id] = sub;
+      });
+
+      setActivities(activitiesData || []);
+      setSubmissions(subsMap);
+    } catch (error) {
+      console.error('خطأ في جلب البيانات:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="space-y-4">
-      <div className="bg-slate-800 text-white p-3 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-md">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-emerald-400 pl-2 border-l border-slate-700">{activityTitle}</span>
-          <button
-            type="button"
-            onClick={() => setActiveTool('text')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-              activeTool === 'text' ? 'bg-[#006837] text-white' : 'bg-slate-700 hover:bg-slate-600'
-            }`}
-          >
-            <Type className="w-4 h-4" /> نص
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTool('check')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-              activeTool === 'check' ? 'bg-emerald-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
-            }`}
-          >
-            <Check className="w-4 h-4" /> علامة صح
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTool('cross')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-              activeTool === 'cross' ? 'bg-rose-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
-            }`}
-          >
-            <X className="w-4 h-4" /> علامة خطأ
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTool('eraser')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all ${
-              activeTool === 'eraser' ? 'bg-amber-600 text-white' : 'bg-slate-700 hover:bg-slate-600'
-            }`}
-          >
-            <Eraser className="w-4 h-4" /> ممحاة
-          </button>
-        </div>
-
-        {activeTool === 'text' && (
-          <input
-            type="text"
-            value={textInput}
-            onChange={(e) => setTextInput(e.target.value)}
-            placeholder="اكتب الإجابة هنا ثم انقر على الورقة..."
-            className="px-3 py-1.5 text-xs rounded-xl bg-slate-900 border border-slate-700 text-white outline-none focus:border-[#006837] w-64"
-          />
-        )}
-
-        <div className="flex items-center gap-2 mr-auto">
-          {onClose && (
+    <div className="min-h-screen bg-gray-50 dir-rtl font-sans pb-10">
+      {/* الهيدر العلوي */}
+      <header className="bg-emerald-800 text-white p-4 shadow-md">
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold">منصة العلوم للأنشطة والواجبات التفاعلية</h1>
+            <p className="text-xs text-emerald-200 mt-1">
+              مدرسة أبو العاص بن الربيع ومتوسطة الربيع بن خثيم | عام 1448 هـ - توقيت أم القرى
+            </p>
+          </div>
+          {onLogout && (
             <button
-              type="button"
-              onClick={onClose}
-              className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-xl text-xs font-bold"
+              onClick={onLogout}
+              className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded-lg transition-colors"
             >
-              إلغاء
+              <LogOut className="w-4 h-4" />
+              <span>تسجيل الخروج</span>
             </button>
           )}
-          <button
-            type="button"
-            disabled={loading || annotations.length === 0}
-            onClick={() => onSaveAnswers(annotations)}
-            className="bg-[#006837] hover:bg-[#00522b] disabled:opacity-50 text-white px-5 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-          >
-            <Send className="w-4 h-4" /> تسليم ورقة الحل النهائي
-          </button>
         </div>
-      </div>
+      </header>
 
-      <div className="p-4 bg-slate-700 overflow-auto flex justify-center border-2 border-slate-200 rounded-2xl shadow-inner">
-        <div
-          ref={containerRef}
-          onClick={handleContainerClick}
-          className="relative bg-white shadow-2xl rounded overflow-hidden min-w-[750px] min-h-[1000px] cursor-crosshair"
-        >
-          <iframe
-            src={`${pdfUrl}#toolbar=0&navpanes=0`}
-            title="Student Worksheet"
-            className="w-[750px] h-[1050px] pointer-events-none"
-          />
-
-          {annotations.map((ann) => (
-            <div
-              key={ann.id}
-              onClick={(e) => handleRemoveAnnotation(ann.id, e)}
-              style={{ left: `${ann.x}px`, top: `${ann.y}px` }}
-              className="absolute z-20 -translate-x-1/2 -translate-y-1/2 cursor-pointer"
-            >
-              {ann.type === 'text' && (
-                <div className="bg-emerald-100/95 text-[#006837] font-extrabold text-xs px-2.5 py-1 rounded border-2 border-[#006837] shadow-lg">
-                  {ann.text}
-                </div>
-              )}
-              {ann.type === 'check' && (
-                <div className="flex items-center justify-center bg-emerald-100 border-2 border-emerald-600 text-emerald-800 rounded-full p-1 shadow-lg">
-                  <Check className="w-5 h-5 font-black" />
-                </div>
-              )}
-              {ann.type === 'cross' && (
-                <div className="flex items-center justify-center bg-rose-100 border-2 border-rose-600 text-rose-800 rounded-full p-1 shadow-lg">
-                  <X className="w-5 h-5 font-black" />
-                </div>
-              )}
-            </div>
-          ))}
+      <main className="max-w-5xl mx-auto p-4 mt-6">
+        {/* معلومات الطالب */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student?.name || student?.student_name}</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              الصف الدراسي: {student?.grade || 'الأول المتوسط'} | الهوية: {student?.national_id}
+            </p>
+          </div>
+          <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-center">
+            <span className="text-xs block text-emerald-600 font-medium">الأنشطة المسلمة</span>
+            <span className="text-xl font-bold">{Object.keys(submissions).length} / {activities.length}</span>
+          </div>
         </div>
-      </div>
+
+        {/* قائمة الأنشطة والواجبات المتاحة */}
+        <h3 className="text-md font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-emerald-600" />
+          قائمة الأنشطة والواجبات المتاحة
+        </h3>
+
+        {loading ? (
+          <div className="text-center py-10 text-gray-500">جاري تحميل الأنشطة...</div>
+        ) : activities.length === 0 ? (
+          <div className="bg-white rounded-xl p-8 text-center text-gray-500 shadow-sm border border-gray-100">
+            لا توجد أنشطة متاحة حالياً.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {activities.map((activity) => {
+              const submission = submissions[activity.id];
+              const isSubmitted = submission && submission.score !== undefined && submission.score !== null;
+
+              // حساب دقيق لتجاوز التوقيت
+              const dueTimestamp = new Date(activity.due_date).getTime();
+              const nowTimestamp = Date.now();
+              const isExpired = nowTimestamp >= dueTimestamp;
+
+              return (
+                <div key={activity.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-gray-800">{activity.title}</h4>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Clock className="w-3.5 h-3.5 text-gray-400" />
+                      <span>
+                        موعد النهاية: {new Date(activity.due_date).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh', dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    {/* عرض الدرجة */}
+                    {isSubmitted && (
+                      <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-lg text-sm">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        <span>الدرجة: {submission.score} / {activity.max_score || 10}</span>
+                      </div>
+                    )}
+
+                    {/* حظر التعديل التام */}
+                    {isSubmitted ? (
+                      <button
+                        disabled
+                        className="flex items-center gap-1 bg-gray-100 text-gray-500 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                      >
+                        <Lock className="w-4 h-4" />
+                        <span>تم التسليم (مغلق)</span>
+                      </button>
+                    ) : isExpired ? (
+                      <button
+                        disabled
+                        className="flex items-center gap-1 bg-gray-100 text-gray-400 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        <span>انتهى موعد التسليم</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onSelectActivity && onSelectActivity(activity)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors shadow-sm"
+                      >
+                        بدء الحل
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </main>
+
+      <footer className="mt-12 text-center text-xs text-gray-500 py-4 border-t border-gray-200">
+        إشراف المعلم: <span className="font-bold text-gray-700">عبدالعزيز آل فايع</span> | مدير المدرسة: <span className="font-bold text-gray-700">محمد الشهري</span>
+      </footer>
     </div>
   );
-};
+}

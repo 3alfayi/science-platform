@@ -51,7 +51,27 @@ export function StudentDashboard({ student, onSelectActivity, onLogout }: Studen
 
   return (
     <div className="min-h-screen bg-slate-100 dir-rtl font-sans pb-10">
-      <main className="max-w-7xl mx-auto p-2 md:p-4">
+      {/* الهيدر العلوي */}
+      <header className="bg-[#006837] text-white p-4 shadow-md sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto flex justify-between items-center">
+          <div>
+            <h1 className="font-extrabold text-lg md:text-xl">منصة العلوم للأنشطة والواجبات التفاعلية</h1>
+            <p className="text-xs text-emerald-200 font-semibold">
+              مدرسة أبو العاص بن الربيع ومتوسطة الربيع بن خثيم | عام 1448 هـ - توقيت أم القرى
+            </p>
+          </div>
+          {onLogout && (
+            <button
+              onClick={onLogout}
+              className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <LogOut className="w-4 h-4" /> تسجيل الخروج
+            </button>
+          )}
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto p-4 md:p-6">
         {/* بيانات الطالب */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6 flex justify-between items-center">
           <div>
@@ -66,7 +86,7 @@ export function StudentDashboard({ student, onSelectActivity, onLogout }: Studen
           </div>
         </div>
 
-        {/* قائمة الأنشطة والواجبات المتاحة */}
+        {/* قائمة الأنشطة المتاحة */}
         <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
@@ -116,7 +136,7 @@ export function StudentDashboard({ student, onSelectActivity, onLogout }: Studen
                       </div>
                     )}
 
-                    {/* المنطق الصارم بالشروط الخمسة */}
+                    {/* الشروط الـ 5 الصارمة لإلغاء أي زر للتعديل */}
                     {hasNotStarted ? (
                       <button
                         disabled
@@ -164,6 +184,10 @@ export function StudentDashboard({ student, onSelectActivity, onLogout }: Studen
           </div>
         )}
       </main>
+
+      <footer className="text-center py-4 text-xs font-bold text-slate-500 border-t bg-white mt-12">
+        إشراف المعلم: <span className="text-[#006837]">عبدالعزيز آل فايع</span> | مدير المدرسة: <span className="text-[#006837]">محمد الشهري</span>
+      </footer>
     </div>
   );
 }

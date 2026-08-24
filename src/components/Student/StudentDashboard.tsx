@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock } from 'lucide-react';
 
@@ -26,7 +26,6 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
     try {
       setLoading(true);
       
-      // 1. جلب الأنشطة
       const { data: activitiesData, error: actError } = await supabase
         .from('activities')
         .select('*')
@@ -34,7 +33,6 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
 
       if (actError) throw actError;
 
-      // 2. جلب تسليمات الطالب
       const { data: submissionsData, error: subError } = await supabase
         .from('submissions')
         .select('*')
@@ -58,7 +56,6 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
 
   return (
     <div className="min-h-screen bg-gray-50 dir-rtl font-sans pb-10">
-      {/* الهيدر العلوي */}
       <header className="bg-emerald-800 text-white p-4 shadow-md">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div>
@@ -78,7 +75,6 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
       </header>
 
       <main className="max-w-5xl mx-auto p-4 mt-6">
-        {/* بيانات الطالب */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student.name}</h2>
@@ -92,7 +88,6 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
           </div>
         </div>
 
-        {/* قائمة الأنشطة */}
         <h3 className="text-md font-bold text-gray-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-emerald-600" />
           قائمة الأنشطة والواجبات المتاحة
@@ -110,10 +105,9 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
               const submission = submissions[activity.id];
               const isSubmitted = submission && submission.score !== undefined && submission.score !== null;
 
-              // معالجة دقيقة للتاريخ والوقت بتوقيت السعودية ومنع مشاكل UTC
-              const dueDateObj = new Date(activity.due_date);
-              const nowObj = new Date();
-              const isExpired = nowObj >= dueDateObj;
+              const dueTimestamp = new Date(activity.due_date).getTime();
+              const nowTimestamp = Date.now();
+              const isExpired = nowTimestamp >= dueTimestamp;
 
               return (
                 <div key={activity.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -122,13 +116,12 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                     <div className="flex items-center gap-2 text-xs text-gray-500">
                       <Clock className="w-3.5 h-3.5 text-gray-400" />
                       <span>
-                        موعد النهاية: {dueDateObj.toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh', dateStyle: 'medium', timeStyle: 'short' })}
+                        موعد النهاية: {new Date(activity.due_date).toLocaleString('ar-SA', { timeZone: 'Asia/Riyadh', dateStyle: 'medium', timeStyle: 'short' })}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {/* عرض الدرجة عند التسليم */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-lg text-sm">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
@@ -136,22 +129,21 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                       </div>
                     )}
 
-                    {/* الزر المغلق عند انتهاء الوقت أو التسليم */}
-                    {isExpired ? (
-                      <button
-                        disabled
-                        className="flex items-center gap-1 bg-gray-100 text-gray-400 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
-                      >
-                        <AlertCircle className="w-4 h-4" />
-                        <span>انتهى موعد التسليم</span>
-                      </button>
-                    ) : isSubmitted ? (
+                    {isSubmitted ? (
                       <button
                         disabled
                         className="flex items-center gap-1 bg-gray-100 text-gray-500 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
                       >
                         <Lock className="w-4 h-4" />
                         <span>تم التسليم (مغلق)</span>
+                      </button>
+                    ) : isExpired ? (
+                      <button
+                        disabled
+                        className="flex items-center gap-1 bg-gray-100 text-gray-400 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        <span>انتهى موعد التسليم</span>
                       </button>
                     ) : (
                       <button

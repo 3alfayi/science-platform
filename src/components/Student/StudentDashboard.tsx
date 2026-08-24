@@ -23,9 +23,11 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
     try {
       setLoading(true);
       
+      // جلب الأنشطة المخصصة لصف الطالب فقط أو الأنشطة العامة
       const { data: activitiesData, error: actError } = await supabase
         .from('activities')
         .select('*, classes(*)')
+        .or(`class_id.eq.${student?.class_id},class_id.is.null`)
         .order('created_at', { ascending: false });
 
       if (actError) throw actError;
@@ -51,6 +53,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
     }
   };
 
+  // دالة تحويل الوقت المسجل من المعلم (start_time / end_time) إلى توقيت مكة المكرمة
   const formatTeacherDate = (isoStr: string | undefined) => {
     if (!isoStr) return 'غير محدد';
     const d = new Date(isoStr);
@@ -65,6 +68,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
     });
   };
 
+  // فتح صحيفة الحل التفاعلية
   if (selectedActivity) {
     return (
       <div className="dir-rtl font-sans p-2 md:p-4">
@@ -92,6 +96,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
   return (
     <div className="dir-rtl font-sans pb-10">
       <main className="max-w-7xl mx-auto p-2 md:p-4">
+        {/* شريط بيانات الطالب */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-black text-slate-800">أهلاً بك الطالب: {student?.full_name}</h2>
@@ -105,6 +110,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
           </div>
         </div>
 
+        {/* قائمة الأنشطة والواجبات المتاحة */}
         <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
@@ -114,7 +120,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
           <div className="text-center py-10 text-slate-500 font-bold">جاري تحميل الأنشطة...</div>
         ) : activities.length === 0 ? (
           <div className="bg-white rounded-2xl p-8 text-center text-slate-400 font-bold shadow-sm border border-slate-200">
-            لا توجد أنشطة متاحة حالياً.
+            لا توجد أنشطة متاحة حالياً لصفك الدراسي.
           </div>
         ) : (
           <div className="space-y-4">
@@ -122,6 +128,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
               const submission = submissions[activity.id];
               const isSubmitted = submission !== undefined && submission !== null;
 
+              // القراءة المباشرة والدقيقة من حقول المعلم (start_time و end_time)
               const startTimeMs = activity.start_time ? new Date(activity.start_time).getTime() : 0;
               const endTimeMs = activity.end_time ? new Date(activity.end_time).getTime() : Infinity;
               const now = Date.now();
@@ -148,6 +155,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
                   </div>
 
                   <div className="flex items-center gap-3">
+                    {/* حالة التسليم والدرجة */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
@@ -159,6 +167,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
                       </div>
                     )}
 
+                    {/* تحكم الأزرار الصارم حسب وقت المعلم */}
                     {hasNotStarted ? (
                       <button
                         disabled

@@ -49,12 +49,20 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
     }
   };
 
-  // دالة تنسيق التاريخ والوقت بأمان لمنع ظهور Invalid Date
-  const formatDate = (dateStr: any) => {
-    if (!dateStr) return 'غير محدد';
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return 'غير محدد';
-    return d.toLocaleString('ar-SA', {
+  // دالة جلب التاريخ الآمنة مهما كان اسم العامود في Supabase
+  const getValidDate = (activity: any, fields: string[]) => {
+    for (const field of fields) {
+      if (activity && activity[field]) {
+        const d = new Date(activity[field]);
+        if (!isNaN(d.getTime())) return d;
+      }
+    }
+    return null;
+  };
+
+  const formatDate = (dateObj: Date | null) => {
+    if (!dateObj) return 'غير محدد';
+    return dateObj.toLocaleString('ar-SA', {
       timeZone: 'Asia/Riyadh',
       dateStyle: 'short',
       timeStyle: 'short',
@@ -96,27 +104,30 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
               const submission = submissions[activity.id];
               const isSubmitted = submission !== undefined && submission !== null;
 
-              const now = Date.now();
-              const startDate = activity.start_date ? new Date(activity.start_date).getTime() : 0;
-              const dueDate = activity.due_date ? new Date(activity.due_date).getTime() : Infinity;
+              const startDateObj = getValidDate(activity, ['start_date', 'start_at', 'created_at']);
+              const dueDateObj = getValidDate(activity, ['due_date', 'due_at', 'deadline']);
 
-              const hasNotStarted = activity.start_date ? now < startDate : false;
-              const isExpired = activity.due_date ? now > dueDate : false;
+              const now = Date.now();
+              const startDate = startDateObj ? startDateObj.getTime() : 0;
+              const dueDate = dueDateObj ? dueDateObj.getTime() : Infinity;
+
+              const hasNotStarted = startDateObj ? now < startDate : false;
+              const isExpired = dueDateObj ? now > dueDate : false;
 
               return (
                 <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <h4 className="font-bold text-slate-800">{activity.title}</h4>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-semibold">
-                      {activity.start_date && (
+                      {startDateObj && (
                         <div className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span>تاريخ البداية: {formatDate(activity.start_date)}</span>
+                          <span>تاريخ البداية: {formatDate(startDateObj)}</span>
                         </div>
                       )}
                       <div className="flex items-center gap-1">
                         <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span>موعد النهاية: {formatDate(activity.due_date)}</span>
+                        <span>موعد النهاية: {formatDate(dueDateObj)}</span>
                       </div>
                     </div>
                   </div>
@@ -134,7 +145,7 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
                       </div>
                     )}
 
-                    {/* الشروط الـ 5 الصارمة لإلغاء أي زر للتعديل */}
+                    {/* الشروط الخمسة بضوابط المحاذاة */}
                     {hasNotStarted ? (
                       <button
                         disabled

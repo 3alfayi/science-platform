@@ -49,15 +49,18 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
     }
   };
 
-  // دالة تحويل التاريخ إلى صيغة أم القرى والرياض بشكل مباشر ودقيق
-  const formatArabicDate = (rawDate: any) => {
-    if (!rawDate) return null;
-    const d = new Date(rawDate);
-    if (isNaN(d.getTime())) return null;
+  // دالة تحويل التاريخ
+  const renderDate = (val: any) => {
+    if (!val) return 'غير محدد';
+    const d = new Date(val);
+    if (isNaN(d.getTime())) return 'غير محدد';
     return d.toLocaleString('ar-SA', {
       timeZone: 'Asia/Riyadh',
-      dateStyle: 'medium',
-      timeStyle: 'short',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   };
 
@@ -96,39 +99,38 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
               const submission = submissions[activity.id];
               const isSubmitted = submission !== undefined && submission !== null;
 
-              // حساب التواريخ والحالات بوضوح ودقة
+              // قراءة التواريخ المتاحة
+              const rawStart = activity.start_date || activity.start_at || activity.created_at;
+              const rawDue = activity.due_date || activity.due_at || activity.deadline;
+
               const now = Date.now();
-              const startDateVal = activity.start_date ? new Date(activity.start_date).getTime() : null;
-              const dueDateVal = activity.due_date ? new Date(activity.due_date).getTime() : null;
+              const startDateVal = rawStart ? new Date(rawStart).getTime() : null;
+              const dueDateVal = rawDue ? new Date(rawDue).getTime() : null;
 
               const hasNotStarted = startDateVal !== null && now < startDateVal;
               const isExpired = dueDateVal !== null && now > dueDateVal;
 
-              const startDateFormatted = formatArabicDate(activity.start_date);
-              const dueDateFormatted = formatArabicDate(activity.due_date);
-
               return (
                 <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-slate-800">{activity.title}</h4>
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-semibold">
-                      {startDateFormatted && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span>تاريخ البداية: {startDateFormatted}</span>
-                        </div>
-                      )}
-                      {dueDateFormatted && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-3.5 h-3.5 text-slate-400" />
-                          <span>موعد النهاية: {dueDateFormatted}</span>
-                        </div>
-                      )}
+                  <div className="space-y-2">
+                    <h4 className="font-bold text-slate-800 text-base">{activity.title}</h4>
+                    
+                    {/* عرض التواريخ بوضوح */}
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 font-semibold">
+                      <div className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200">
+                        <Clock className="w-3.5 h-3.5 text-amber-600" />
+                        <span>تاريخ البداية: {renderDate(rawStart)}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
+                        <Clock className="w-3.5 h-3.5 text-slate-500" />
+                        <span>موعد النهاية: {renderDate(rawDue)}</span>
+                      </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {/* عرض حالة الدرجة أو التسليم */}
+                    {/* عرض درجة التسليم */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
@@ -140,7 +142,7 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
                       </div>
                     )}
 
-                    {/* منطق الأزرار الخمسة الصحيح */}
+                    {/* أزرار الحالات الخمس */}
                     {hasNotStarted ? (
                       <button
                         disabled

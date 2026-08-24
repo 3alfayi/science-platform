@@ -49,22 +49,14 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
     }
   };
 
-  // دالة جلب التاريخ الآمنة مهما كان اسم العامود في Supabase
-  const getValidDate = (activity: any, fields: string[]) => {
-    for (const field of fields) {
-      if (activity && activity[field]) {
-        const d = new Date(activity[field]);
-        if (!isNaN(d.getTime())) return d;
-      }
-    }
-    return null;
-  };
-
-  const formatDate = (dateObj: Date | null) => {
-    if (!dateObj) return 'غير محدد';
-    return dateObj.toLocaleString('ar-SA', {
+  // دالة تحويل التاريخ إلى صيغة أم القرى والرياض بشكل مباشر ودقيق
+  const formatArabicDate = (rawDate: any) => {
+    if (!rawDate) return null;
+    const d = new Date(rawDate);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleString('ar-SA', {
       timeZone: 'Asia/Riyadh',
-      dateStyle: 'short',
+      dateStyle: 'medium',
       timeStyle: 'short',
     });
   };
@@ -104,36 +96,39 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
               const submission = submissions[activity.id];
               const isSubmitted = submission !== undefined && submission !== null;
 
-              const startDateObj = getValidDate(activity, ['start_date', 'start_at', 'created_at']);
-              const dueDateObj = getValidDate(activity, ['due_date', 'due_at', 'deadline']);
-
+              // حساب التواريخ والحالات بوضوح ودقة
               const now = Date.now();
-              const startDate = startDateObj ? startDateObj.getTime() : 0;
-              const dueDate = dueDateObj ? dueDateObj.getTime() : Infinity;
+              const startDateVal = activity.start_date ? new Date(activity.start_date).getTime() : null;
+              const dueDateVal = activity.due_date ? new Date(activity.due_date).getTime() : null;
 
-              const hasNotStarted = startDateObj ? now < startDate : false;
-              const isExpired = dueDateObj ? now > dueDate : false;
+              const hasNotStarted = startDateVal !== null && now < startDateVal;
+              const isExpired = dueDateVal !== null && now > dueDateVal;
+
+              const startDateFormatted = formatArabicDate(activity.start_date);
+              const dueDateFormatted = formatArabicDate(activity.due_date);
 
               return (
                 <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-1">
                     <h4 className="font-bold text-slate-800">{activity.title}</h4>
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 font-semibold">
-                      {startDateObj && (
+                      {startDateFormatted && (
                         <div className="flex items-center gap-1">
                           <Clock className="w-3.5 h-3.5 text-amber-500" />
-                          <span>تاريخ البداية: {formatDate(startDateObj)}</span>
+                          <span>تاريخ البداية: {startDateFormatted}</span>
                         </div>
                       )}
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span>موعد النهاية: {formatDate(dueDateObj)}</span>
-                      </div>
+                      {dueDateFormatted && (
+                        <div className="flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400" />
+                          <span>موعد النهاية: {dueDateFormatted}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {/* عرض حالة الدرجة أو التصحيح */}
+                    {/* عرض حالة الدرجة أو التسليم */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
@@ -145,7 +140,7 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
                       </div>
                     )}
 
-                    {/* الشروط الخمسة بضوابط المحاذاة */}
+                    {/* منطق الأزرار الخمسة الصحيح */}
                     {hasNotStarted ? (
                       <button
                         disabled

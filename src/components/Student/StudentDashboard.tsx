@@ -1,227 +1,165 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import type { Activity, Submission } from '../../types';
-import { InteractivePdfViewer } from './InteractivePdfViewer';
-import { BookOpen, CheckCircle, Clock, FileText, AlertCircle, Award } from 'lucide-react';
+import { supabase } from '../supabaseClient'; // مسار ملف Supabase لديك
+import { Calendar, CheckCircle, Clock, AlertCircle, LogOut } from 'lucide-react';
 
-interface StudentDashboardProps {
-  student: {
-    id: string;
-    full_name: string;
-    national_id: string;
-    class_id: string;
-    classes?: {
-      name: string;
-    };
-  };
-}
-
-export const StudentDashboard: React.FC<StudentDashboardProps> = ({ student }) => {
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [submissions, setSubmissions] = useState<Submission[]>([]);
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+export default function StudentDashboard({ student, onSelectActivity, onLogout }) {
+  const [activities, setActivities] = useState([]);
+  const [submissions, setSubmissions] = useState({});
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchStudentActivities();
-    fetchStudentSubmissions();
-  }, [student.class_id, student.id]);
+    fetchData();
+  }, [student]);
 
-  const fetchStudentActivities = async () => {
-    const { data } = await supabase
-      .from('activities')
-      .select('*, classes(*)')
-      .eq('class_id', student.class_id)
-      .order('created_at', { ascending: false });
-    if (data) setActivities(data);
-  };
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      // 1. جلب الأنشطة والواجبات المتاحة
+      const { data: activitiesData, error: actError } = await supabase
+        .from('activities')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-  const fetchStudentSubmissions = async () => {
-    const { data } = await supabase
-      .from('submissions')
-      .select('*')
-      .eq('student_id', student.id);
-    if (data) setSubmissions(data);
-  };
+      if (actError) throw actError;
 
-  const getActivityStatus = (activity: Activity) => {
-    const sub = submissions.find((s) => s.activity_id === activity.id);
-    if (sub) return { status: 'submitted', label: 'تم التسليم', sub };
-
-    const now = new Date().getTime();
-    const end = new Date(activity.end_time).getTime();
-    if (now > end) return { status: 'expired', label: 'انتهى الوقت ولم يتم التسليم', sub: undefined };
-
-    return { status: 'active', label: 'متاح للحل', sub: undefined };
-  };
-
-  const handleSaveAnswers = async (annotations: any[]) => {
-    if (!selectedActivity) return;
-    setLoading(true);
-
-    const existingSub = submissions.find((s) => s.activity_id === selectedActivity.id);
-
-    if (existingSub) {
-      const { error } = await supabase
+      // 2. جلب إجابات وتسليمات الطالب الحالي
+      const { data: submissionsData, error: subError } = await supabase
         .from('submissions')
-        .update({
-          answers_data: annotations,
-        })
-        .eq('id', existingSub.id);
+        .select('*')
+        .eq('student_id', student.id);
 
+      if (subError) throw subError;
+
+      // تحويل التسليمات إلى خريطة (Map) لسهولة الوصول بحسب id النشاط
+      const subsMap = {};
+      submissionsData?.forEach(sub => {
+        subsMap[sub.activity_id] = sub;
+      });
+
+      setActivities(activitiesData || []);
+      setSubmissions(subsMap);
+    } catch (error) {
+      console.error('خطأ في جلب البيانات:', error);
+    } finally {
       setLoading(false);
-
-      if (!error) {
-        setMsg({ type: 'success', text: 'تم تحديث إجاباتك ورقة النشاط بنجاح!' });
-        setSelectedActivity(null);
-        fetchStudentSubmissions();
-      } else {
-        setMsg({ type: 'error', text: 'حدث خطأ أثناء حفظ الإجابات.' });
-      }
-    } else {
-      const { error } = await supabase.from('submissions').insert([
-        {
-          student_id: student.id,
-          activity_id: selectedActivity.id,
-          answers_data: annotations,
-          score: null,
-          max_score: 10,
-        },
-      ]);
-
-      setLoading(false);
-
-      if (!error) {
-        setMsg({ type: 'success', text: 'تم تسليم ورقة الحل بنجاح!' });
-        setSelectedActivity(null);
-        fetchStudentSubmissions();
-      } else {
-        setMsg({ type: 'error', text: 'حدث خطأ أثناء رفع تسليم ورقة الحل.' });
-      }
     }
   };
 
+  const currentDate = new Date();
+
   return (
-    <div className="space-y-6">
-      {msg && (
-        <div className="p-4 rounded-xl flex items-center justify-between font-bold text-sm bg-emerald-50 text-emerald-800 border border-emerald-200">
-          <span>{msg.text}</span>
-          <button onClick={() => setMsg(null)}>×</button>
+    <div className="min-h-screen bg-gray-50 dir-rtl font-sans pb-10">
+      {/* الهيدر العلوي للمنصة */}
+      <header className="bg-emerald-800 text-white p-4 shadow-md">
+        <div className="max-w-5xl mx-auto flex justify-between items-center">
+          <div>
+            <h1 className="text-xl font-bold">منصة العلوم للأنشطة والواجبات التفاعلية</h1>
+            <p className="text-xs text-emerald-200 mt-1">
+              مدرسة أبو العاص بن الربيع ومتوسطة الربيع بن خثيم | عام 1448 هـ - توقيت أم القرى
+            </p>
+          </div>
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-1 bg-red-600 hover:bg-red-700 text-white text-sm px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>تسجيل الخروج</span>
+          </button>
         </div>
-      )}
+      </header>
 
-      {/* 🔹 كارت الطالب الترحيبي */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row justify-between items-center gap-4">
-        <div>
-          <h2 className="text-xl font-black text-slate-800">أهلاً بك الطالب: {student.full_name}</h2>
-          <p className="text-xs font-semibold text-slate-500 mt-1">
-            الصف الدراسي: <span className="text-[#006837] font-bold">{student.classes?.name || 'غير محدد'}</span> | الهوية: <span className="font-mono">{student.national_id}</span>
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="px-4 py-2 bg-emerald-50 border border-emerald-200 rounded-xl text-center">
-            <span className="block text-xs font-extrabold text-emerald-800">الأنشطة المسلمة</span>
-            <span className="text-lg font-black text-[#006837] font-mono">{submissions.length} / {activities.length}</span>
+      <main className="max-w-5xl mx-auto p-4 mt-6">
+        {/* ترويسة معلومات الطالب */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
+          <div>
+            <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student.name}</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              الصف الدراسي: {student.grade || 'الأول المتوسط'} | الهوية: {student.national_id}
+            </p>
+          </div>
+          <div className="bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-center">
+            <span className="text-xs block text-emerald-600 font-medium">الأنشطة المسلمة</span>
+            <span className="text-xl font-bold">{Object.keys(submissions).length} / {activities.length}</span>
           </div>
         </div>
-      </div>
 
-      {/* 🔹 واجهة العرض والتفاعل إذا تم اختيار نشاط للحل */}
-      {selectedActivity ? (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-lg space-y-4">
-          <div className="flex justify-between items-center border-b pb-4">
-            <div>
-              <h3 className="font-extrabold text-[#006837] text-lg">حل النشاط: {selectedActivity.title}</h3>
-              <p className="text-xs text-slate-500 font-bold mt-0.5">انقر على الخيارات العلوية لإدراج الإجابات داخل الورقة التفاعلية</p>
-            </div>
-            <button
-              onClick={() => setSelectedActivity(null)}
-              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-            >
-              إلغاء والعودة
-            </button>
+        {/* قائمة الأنشطة والواجبات */}
+        <h3 className="text-md font-bold text-gray-700 mb-4 flex items-center gap-2">
+          <Calendar className="w-5 h-5 text-emerald-600" />
+          قائمة الأنشطة والواجبات المتاحة
+        </h3>
+
+        {loading ? (
+          <div className="text-center py-10 text-gray-500">جاري تحميل الأنشطة...</div>
+        ) : activities.length === 0 ? (
+          <div className="bg-white rounded-xl p-8 text-center text-gray-500 shadow-sm border border-gray-100">
+            لا توجد أنشطة متاحة حالياً.
           </div>
+        ) : (
+          <div className="space-y-4">
+            {activities.map((activity) => {
+              const submission = submissions[activity.id];
+              const dueDate = new Date(activity.due_date);
+              const isExpired = currentDate > dueDate;
+              const isSubmitted = submission && submission.score !== undefined && submission.score !== null;
 
-          <InteractivePdfViewer
-            pdfUrl={selectedActivity.pdf_url}
-            activityTitle={selectedActivity.title}
-            onClose={() => setSelectedActivity(null)}
-            onSaveAnswers={handleSaveAnswers}
-            loading={loading}
-          />
-        </div>
-      ) : (
-        /* 🔹 جدول وقائمة الأنشطة والواجبات المطروحة */
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-            <h3 className="font-bold text-slate-800 text-lg flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-[#006837]" /> قائمة الأنشطة والواجبات المتاحة
-            </h3>
-          </div>
-
-          <div className="divide-y divide-slate-100">
-            {activities.length === 0 ? (
-              <div className="p-10 text-center text-slate-400 font-bold">لا توجد أنشطة مطروحة لصفك الدراسي حالياً</div>
-            ) : (
-              activities.map((act) => {
-                const { status, label, sub } = getActivityStatus(act);
-
-                return (
-                  <div key={act.id} className="p-5 flex flex-col md:flex-row justify-between items-center gap-4 hover:bg-slate-50 transition-colors">
-                    <div className="space-y-1 text-right w-full md:w-auto">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-5 h-5 text-[#006837]" />
-                        <h4 className="font-black text-slate-800 text-base">{act.title}</h4>
-                      </div>
-                      <div className="flex items-center gap-4 text-xs font-semibold text-slate-500 mr-7">
-                        <span>موعد النهاية: <span className="font-mono text-slate-700">{new Date(act.end_time).toLocaleString('ar-SA')}</span></span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 w-full md:w-auto justify-end">
-                      {status === 'submitted' && (
-                        <div className="flex items-center gap-3">
-                          {sub?.score !== null && sub?.score !== undefined ? (
-                            <span className="px-3.5 py-1.5 bg-emerald-100 text-[#006837] border border-emerald-300 font-black rounded-xl text-sm flex items-center gap-1">
-                              <Award className="w-4 h-4" /> الدرجة: {sub.score} / {(sub as any)?.max_score || 10}
-                            </span>
-                          ) : (
-                            <span className="px-3.5 py-1.5 bg-blue-50 text-blue-800 border border-blue-200 font-bold rounded-xl text-xs flex items-center gap-1">
-                              <CheckCircle className="w-4 h-4 text-blue-600" /> تم التسليم (بانتظار التصحيح)
-                            </span>
-                          )}
-                          <button
-                            onClick={() => setSelectedActivity(act)}
-                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            تعديل الحل
-                          </button>
-                        </div>
-                      )}
-
-                      {status === 'expired' && (
-                        <span className="px-4 py-2 bg-rose-50 text-rose-700 border border-rose-200 font-extrabold rounded-xl text-xs flex items-center gap-1">
-                          <AlertCircle className="w-4 h-4" /> {label}
-                        </span>
-                      )}
-
-                      {status === 'active' && (
-                        <button
-                          onClick={() => setSelectedActivity(act)}
-                          className="px-5 py-2.5 bg-[#006837] hover:bg-[#00522b] text-white font-black rounded-xl text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Clock className="w-4 h-4" /> فتح والبدء بالحل
-                        </button>
-                      )}
+              return (
+                <div key={activity.id} className="bg-white rounded-xl shadow-sm border border-gray-100 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-gray-800">{activity.title}</h4>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <Clock className="w-3.5 h-3.5 text-gray-400" />
+                      <span>
+                        موعد النهاية: {dueDate.toLocaleString('ar-SA', { dateStyle: 'medium', timeStyle: 'short' })}
+                      </span>
                     </div>
                   </div>
-                );
-              })
-            )}
+
+                  <div className="flex items-center gap-3">
+                    {/* عرض الدرجة في حال التسليم */}
+                    {isSubmitted && (
+                      <div className="flex items-center gap-1 bg-emerald-100 text-emerald-800 font-bold px-3 py-1 rounded-lg text-sm">
+                        <CheckCircle className="w-4 h-4 text-emerald-600" />
+                        <span>الدرجة: {submission.score} / {activity.max_score || 10}</span>
+                      </div>
+                    )}
+
+                    {/* زر التفاعل وفق الشرط الدقيق */}
+                    {isExpired ? (
+                      <button
+                        disabled
+                        className="flex items-center gap-1 bg-gray-200 text-gray-500 font-medium px-4 py-2 rounded-lg cursor-not-allowed text-sm"
+                      >
+                        <AlertCircle className="w-4 h-4" />
+                        <span>انتهى الوقت</span>
+                      </button>
+                    ) : isSubmitted ? (
+                      <button
+                        onClick={() => onSelectActivity(activity)}
+                        className="bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 font-medium px-4 py-2 rounded-lg text-sm transition-colors"
+                      >
+                        تعديل الحل
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => onSelectActivity(activity)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors shadow-sm"
+                      >
+                        بدء الحل
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        </div>
-      )}
+        )}
+      </main>
+
+      {/* التذييل الخاص بإشراف المعلم وإدارة المدرسة */}
+      <footer className="mt-12 text-center text-xs text-gray-500 py-4 border-t border-gray-200">
+        إشراف المعلم: <span className="font-bold text-gray-700">عبدالعزيز آل فايع</span> | مدير المدرسة: <span className="font-bold text-gray-700">محمد الشهري</span>
+      </footer>
     </div>
   );
-};
+}

@@ -51,7 +51,6 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
 
   return (
     <div className="min-h-screen bg-gray-50 dir-rtl font-sans pb-10">
-      {/* الهيدر العلوي */}
       <header className="bg-emerald-800 text-white p-4 shadow-md">
         <div className="max-w-5xl mx-auto flex justify-between items-center">
           <div>
@@ -71,7 +70,6 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
       </header>
 
       <main className="max-w-5xl mx-auto p-4 mt-6">
-        {/* بيانات الطالب */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-bold text-gray-800">أهلاً بك الطالب: {student?.name || student?.student_name}</h2>
@@ -130,7 +128,7 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                       </div>
                     )}
 
-                    {/* المنطق الحاسم حسب طلبك exact */}
+                    {/* المنطق الصارم والشامل للمشرع */}
                     {hasNotStarted ? (
                       // 1. لم يبدأ بعد
                       <button
@@ -140,17 +138,17 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                         <TimerOff className="w-4 h-4" />
                         <span>لم يبدأ الموعد بعد</span>
                       </button>
-                    ) : isSubmitted ? (
-                      // 2. تم التسليم (مغلق تماماً)
+                    ) : isExpired && isSubmitted ? (
+                      // 2. انتهى الموعد + تم التسليم
                       <button
                         disabled
-                        className="flex items-center gap-1 bg-gray-100 text-gray-500 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                        className="flex items-center gap-1 bg-gray-100 text-gray-600 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
                       >
                         <Lock className="w-4 h-4" />
-                        <span>تم التسليم (مغلق)</span>
+                        <span>انتهى الموعد وتم التسليم</span>
                       </button>
-                    ) : isExpired ? (
-                      // 3. انتهى ولم يتم التسليم
+                    ) : isExpired && !isSubmitted ? (
+                      // 3. انتهى الموعد + لم يتم التسليم
                       <button
                         disabled
                         className="flex items-center gap-1 bg-red-50 text-red-600 border border-red-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
@@ -158,8 +156,17 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
                         <AlertCircle className="w-4 h-4" />
                         <span>انتهى الموعد ولم يتم التسليم</span>
                       </button>
+                    ) : isSubmitted ? (
+                      // 4. الوقت متاح + تم التسليم (مغلق لمنع التعديل)
+                      <button
+                        disabled
+                        className="flex items-center gap-1 bg-gray-100 text-gray-500 border border-gray-200 font-medium px-4 py-2 rounded-lg text-sm cursor-not-allowed"
+                      >
+                        <Lock className="w-4 h-4" />
+                        <span>تم التسليم (مغلق)</span>
+                      </button>
                     ) : (
-                      // 4. متاح للحل
+                      // 5. الوقت متاح + لم يحل بعد
                       <button
                         onClick={() => onSelectActivity(activity)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-5 py-2 rounded-lg text-sm transition-colors shadow-sm"

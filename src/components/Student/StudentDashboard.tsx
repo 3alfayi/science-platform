@@ -50,21 +50,12 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
     }
   };
 
-  // دالة قراءة التاريخ الآمنة من حقول المعلم
-  const getTeacherDate = (activity: any, possibleFields: string[]) => {
-    for (const field of possibleFields) {
-      if (activity && activity[field]) {
-        const d = new Date(activity[field]);
-        if (!isNaN(d.getTime())) return d;
-      }
-    }
-    return null;
-  };
-
-  // دالة تنسيق التاريخ بتوقيت أم القرى والرياض
-  const formatDate = (dateObj: Date | null) => {
-    if (!dateObj) return 'غير محدد في النظام';
-    return dateObj.toLocaleString('ar-SA', {
+  // دالة تنسيق التواريخ الصادرة من لوحة المعلم
+  const formatTeacherDate = (isoStr: string) => {
+    if (!isoStr) return 'غير محدد';
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return 'غير محدد';
+    return d.toLocaleString('ar-SA', {
       timeZone: 'Asia/Riyadh',
       year: 'numeric',
       month: 'numeric',
@@ -74,16 +65,16 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
     });
   };
 
-  // إذا تم اختيار نشاط لفتحه والحل
+  // عند النقر على "بدء الحل" والانتقال لصفحة حل PDF
   if (selectedActivity) {
     return (
-      <div className="dir-rtl font-sans p-4">
+      <div className="dir-rtl font-sans p-2 md:p-4">
         <button
           onClick={() => {
             setSelectedActivity(null);
             fetchData();
           }}
-          className="mb-4 bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-xl font-bold cursor-pointer transition-colors"
+          className="mb-4 bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-xl font-bold cursor-pointer transition-colors shadow-sm"
         >
           ← العودة لقائمة الأنشطة
         </button>
@@ -116,7 +107,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
           </div>
         </div>
 
-        {/* قائمة الأنشطة المتاحة */}
+        {/* قائمة الأنشطة والواجبات */}
         <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
@@ -134,51 +125,47 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
               const submission = submissions[activity.id];
               const isSubmitted = submission !== undefined && submission !== null;
 
-              // جلب التواريخ الحقيقية المحددة بواسطة المعلم
-              const startDateObj = getTeacherDate(activity, ['start_date', 'start_at', 'created_at']);
-              const dueDateObj = getTeacherDate(activity, ['due_date', 'due_at', 'end_date', 'deadline']);
-
+              // المطابقة مع حقول معلم المادة (start_time و end_time)
+              const startTimeMs = activity.start_time ? new Date(activity.start_time).getTime() : 0;
+              const endTimeMs = activity.end_time ? new Date(activity.end_time).getTime() : Infinity;
               const now = Date.now();
-              const startDateMs = startDateObj ? startDateObj.getTime() : 0;
-              const dueDateMs = dueDateObj ? dueDateObj.getTime() : 0;
 
-              // التحقق الدقيق من الشروط الزمانية
-              const hasNotStarted = startDateObj ? now < startDateMs : false;
-              const isExpired = dueDateObj ? now > dueDateMs : false;
+              // تقييم شروط الوقت الصارمة
+              const hasNotStarted = activity.start_time ? now < startTimeMs : false;
+              const isExpired = activity.end_time ? now > endTimeMs : false;
 
               return (
                 <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="space-y-2">
                     <h4 className="font-bold text-slate-800 text-base">{activity.title}</h4>
                     
-                    {/* عرض التواريخ المسحوبة مباشرة من حساب المعلم */}
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 font-semibold">
                       <div className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200">
                         <Clock className="w-3.5 h-3.5 text-amber-600" />
-                        <span>تاريخ البداية: {formatDate(startDateObj)}</span>
+                        <span>تاريخ البداية: {formatTeacherDate(activity.start_time)}</span>
                       </div>
 
                       <div className="flex items-center gap-1 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
                         <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        <span>موعد النهاية: {formatDate(dueDateObj)}</span>
+                        <span>موعد النهاية: {formatTeacherDate(activity.end_time)}</span>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {/* عرض حالة الدرجة والتسليم */}
+                    {/* عرض حالة الدرجة في حال التسليم */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
                         <span>
                           {submission.score !== undefined && submission.score !== null
-                            ? `الدرجة: ${submission.score} / ${activity.max_score || 10}`
+                            ? `الدرجة: ${submission.score} / ${submission.max_score || 10}`
                             : 'تم التسليم (بانتظار التصحيح)'}
                         </span>
                       </div>
                     )}
 
-                    {/* تطبيق شروط الأزرار المحددة بصلابة */}
+                    {/* تقييد أزرار التفاعل حسب الشروط الزمانية */}
                     {hasNotStarted ? (
                       <button
                         disabled

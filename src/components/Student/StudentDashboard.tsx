@@ -2,10 +2,16 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Calendar, CheckCircle, Clock, AlertCircle, LogOut, Lock } from 'lucide-react';
 
-export default function StudentDashboard({ student, onSelectActivity, onLogout }) {
-  const [activities, setActivities] = useState([]);
-  const [submissions, setSubmissions] = useState({});
-  const [loading, setLoading] = useState(true);
+interface StudentDashboardProps {
+  student: any;
+  onSelectActivity: (activity: any) => void;
+  onLogout: () => void;
+}
+
+export default function StudentDashboard({ student, onSelectActivity, onLogout }: StudentDashboardProps) {
+  const [activities, setActivities] = useState<any[]>([]);
+  const [submissions, setSubmissions] = useState<Record<string, any>>({});
+  const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
     fetchData();
@@ -29,8 +35,8 @@ export default function StudentDashboard({ student, onSelectActivity, onLogout }
 
       if (subError) throw subError;
 
-      const subsMap = {};
-      submissionsData?.forEach((sub) => {
+      const subsMap: Record<string, any> = {};
+      submissionsData?.forEach((sub: any) => {
         subsMap[sub.activity_id] = sub;
       });
 

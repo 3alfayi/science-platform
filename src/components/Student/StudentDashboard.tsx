@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { Calendar, CheckCircle, Clock, AlertCircle, Lock, TimerOff } from 'lucide-react';
+import InteractivePdfViewer from './InteractivePdfViewer';
 
 interface StudentDashboardProps {
   student: any;
-  onSelectActivity?: (activity: any) => void;
   onLogout?: () => void;
 }
 
-export function StudentDashboard({ student, onSelectActivity }: StudentDashboardProps) {
+export function StudentDashboard({ student }: StudentDashboardProps) {
   const [activities, setActivities] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<boolean>(true);
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
 
   useEffect(() => {
     fetchData();
@@ -49,24 +50,44 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
     }
   };
 
-  const renderArabicDate = (rawDate: any) => {
-    if (!rawDate) return null;
-    const d = new Date(rawDate);
-    if (isNaN(d.getTime())) return null;
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return 'غير محدد';
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return 'غير محدد';
     return d.toLocaleString('ar-SA', {
       timeZone: 'Asia/Riyadh',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+      dateStyle: 'medium',
+      timeStyle: 'short',
     });
   };
+
+  if (selectedActivity) {
+    return (
+      <div>
+        <button
+          onClick={() => {
+            setSelectedActivity(null);
+            fetchData();
+          }}
+          className="mb-4 bg-slate-800 text-white text-xs px-4 py-2 rounded-xl font-bold cursor-pointer hover:bg-slate-700"
+        >
+          ← العودة لقائمة الأنشطة
+        </button>
+        <InteractivePdfViewer
+          student={student}
+          activity={selectedActivity}
+          onClose={() => {
+            setSelectedActivity(null);
+            fetchData();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="dir-rtl font-sans pb-10">
       <main className="max-w-7xl mx-auto p-2 md:p-4">
-        {/* بيانات الطالب */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6 flex justify-between items-center">
           <div>
             <h2 className="text-lg font-black text-slate-800">أهلاً بك الطالب: {student?.full_name || student?.name}</h2>
@@ -80,7 +101,6 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
           </div>
         </div>
 
-        {/* قائمة الأنشطة المتاحة */}
         <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
@@ -98,18 +118,12 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
               const submission = submissions[activity.id];
               const isSubmitted = submission !== undefined && submission !== null;
 
-              const rawStart = activity.start_date || activity.start_at || activity.created_at;
-              const rawDue = activity.due_date || activity.due_at || activity.end_date || activity.deadline;
-
-              const startDateTxt = renderArabicDate(rawStart);
-              const dueDateTxt = renderArabicDate(rawDue);
-
               const now = Date.now();
-              const startDateVal = rawStart ? new Date(rawStart).getTime() : null;
-              const dueDateVal = rawDue ? new Date(rawDue).getTime() : null;
+              const startDateMs = activity.start_date ? new Date(activity.start_date).getTime() : 0;
+              const dueDateMs = activity.due_date ? new Date(activity.due_date).getTime() : Infinity;
 
-              const hasNotStarted = startDateVal !== null && !isNaN(startDateVal) && now < startDateVal;
-              const isExpired = dueDateVal !== null && !isNaN(dueDateVal) && now > dueDateVal;
+              const hasNotStarted = now < startDateMs;
+              const isExpired = now > dueDateMs;
 
               return (
                 <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -117,22 +131,23 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
                     <h4 className="font-bold text-slate-800 text-base">{activity.title}</h4>
                     
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 font-semibold">
-                      {startDateTxt && (
+                      {activity.start_date && (
                         <div className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200">
                           <Clock className="w-3.5 h-3.5 text-amber-600" />
-                          <span>تاريخ البداية: {startDateTxt}</span>
+                          <span>تاريخ البداية: {formatDate(activity.start_date)}</span>
                         </div>
                       )}
 
-                      <div className="flex items-center gap-1 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
-                        <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        <span>موعد النهاية: {dueDateTxt || 'مفتوح (بدون حد)'}</span>
-                      </div>
+                      {activity.due_date && (
+                        <div className="flex items-center gap-1 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
+                          <Clock className="w-3.5 h-3.5 text-slate-500" />
+                          <span>موعد النهاية: {formatDate(activity.due_date)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {/* عرض درجة التسليم إن وجدت */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
@@ -144,7 +159,7 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
                       </div>
                     )}
 
-                    {/* الأزرار الـ 5 المعتمدة بصرامة */}
+                    {/* أزرار الحالات المطلوبة بصرامة دون خيار تعديل */}
                     {hasNotStarted ? (
                       <button
                         disabled
@@ -179,7 +194,7 @@ export function StudentDashboard({ student, onSelectActivity }: StudentDashboard
                       </button>
                     ) : (
                       <button
-                        onClick={() => onSelectActivity && onSelectActivity(activity)}
+                        onClick={() => setSelectedActivity(activity)}
                         className="bg-[#006837] hover:bg-[#00522b] text-white font-extrabold px-5 py-2 rounded-xl text-xs transition-colors shadow-sm cursor-pointer"
                       >
                         بدء الحل

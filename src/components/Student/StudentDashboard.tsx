@@ -50,7 +50,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
     }
   };
 
-  // دالة تنسيق التواريخ الصادرة من لوحة المعلم
+  // دالة تحويل تاريخ ووقت المعلم لتوقيت أم القرى
   const formatTeacherDate = (isoStr: string) => {
     if (!isoStr) return 'غير محدد';
     const d = new Date(isoStr);
@@ -65,7 +65,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
     });
   };
 
-  // عند النقر على "بدء الحل" والانتقال لصفحة حل PDF
+  // إذا تم النقر على زر بدء الحل يفتح واجهة PDF التفاعلية مباشرة
   if (selectedActivity) {
     return (
       <div className="dir-rtl font-sans p-2 md:p-4">
@@ -107,7 +107,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
           </div>
         </div>
 
-        {/* قائمة الأنشطة والواجبات */}
+        {/* قائمة الأنشطة والواجبات المتاحة */}
         <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[#006837]" />
           قائمة الأنشطة والواجبات المتاحة
@@ -125,12 +125,12 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
               const submission = submissions[activity.id];
               const isSubmitted = submission !== undefined && submission !== null;
 
-              // المطابقة مع حقول معلم المادة (start_time و end_time)
+              // قراءة المواعيد مباشرة من أسماء حقول لوحة المعلم (start_time و end_time)
               const startTimeMs = activity.start_time ? new Date(activity.start_time).getTime() : 0;
               const endTimeMs = activity.end_time ? new Date(activity.end_time).getTime() : Infinity;
               const now = Date.now();
 
-              // تقييم شروط الوقت الصارمة
+              // تقييم شروط الموعد بدقة
               const hasNotStarted = activity.start_time ? now < startTimeMs : false;
               const isExpired = activity.end_time ? now > endTimeMs : false;
 
@@ -153,7 +153,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
                   </div>
 
                   <div className="flex items-center gap-3">
-                    {/* عرض حالة الدرجة في حال التسليم */}
+                    {/* عرض حالة الدرجة والتسليم */}
                     {isSubmitted && (
                       <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
                         <CheckCircle className="w-4 h-4 text-emerald-600" />
@@ -165,7 +165,7 @@ export function StudentDashboard({ student }: StudentDashboardProps) {
                       </div>
                     )}
 
-                    {/* تقييد أزرار التفاعل حسب الشروط الزمانية */}
+                    {/* تقييد حالة الأزرار بناءً على الوقت المطبّق في لوحة المعلم */}
                     {hasNotStarted ? (
                       <button
                         disabled

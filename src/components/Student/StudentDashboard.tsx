@@ -1,222 +1,235 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { Calendar, CheckCircle, Clock, AlertCircle, Lock, TimerOff } from 'lucide-react';
-import InteractivePdfViewer from './InteractivePdfViewer';
-import type { Activity, Student, Submission } from '../../types';
+import React, { useState, useRef } from 'react';
+import { supabase } from '../lib/supabase';
+import type { Activity, Student } from '../types';
+import { Check, X, Type, Send, Trash2, FileText, CheckCircle } from 'lucide-react';
 
-interface StudentDashboardProps {
+interface StudentViewProps {
   student: Student;
-  onLogout?: () => void;
+  activity: Activity;
+  onSuccessSubmission?: () => void;
 }
 
-export function StudentDashboard({ student }: StudentDashboardProps) {
-  const [activities, setActivities] = useState<Activity[]>([]);
-  const [submissions, setSubmissions] = useState<Record<string, Submission>>({});
-  const [loading, setLoading] = useState<boolean>(true);
-  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+interface Annotation {
+  id: string;
+  type: 'check' | 'cross' | 'text';
+  x: number; // نسبة مئوية %
+  y: number; // نسبة مئوية %
+  text?: string;
+}
 
-  useEffect(() => {
-    fetchData();
-  }, [student]);
+export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onSuccessSubmission }) => {
+  const [selectedTool, setSelectedTool] = useState<'check' | 'cross' | 'text'>('check');
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [textInput, setTextInput] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  
+  const sheetRef = useRef<HTMLDivElement>(null);
 
-  const fetchData = async () => {
-    try {
-      setLoading(true);
-      
-      // جلب الأنشطة المخصصة لصف الطالب فقط أو الأنشطة العامة
-      const { data: activitiesData, error: actError } = await supabase
-        .from('activities')
-        .select('*, classes(*)')
-        .or(`class_id.eq.${student?.class_id},class_id.is.null`)
-        .order('created_at', { ascending: false });
+  // إضافة علامة أو نص فوق ورقة العمل عند ضغط الطالب
+  const handleSheetClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!sheetRef.current || submitted) return;
 
-      if (actError) throw actError;
+    const rect = sheetRef.current.getBoundingClientRect();
+    // حساب الموقع كنسبة مئوية دقيقة لضمان التطابق على جميع الشاشات
+    const xPct = Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(2));
+    const yPct = Number((((e.clientY - rect.top) / rect.height) * 100).toFixed(2));
 
-      const { data: submissionsData, error: subError } = await supabase
-        .from('submissions')
-        .select('*')
-        .eq('student_id', student?.id);
+    if (selectedTool === 'text' && !textInput.trim()) {
+      alert('يرجى كتابة النص في الخانة المخصصة أولاً قبل الضغط على الورقة!');
+      return;
+    }
 
-      if (subError) throw subError;
+    const newAnnotation: Annotation = {
+      id: Date.now().toString(),
+      type: selectedTool,
+      x: xPct,
+      y: yPct,
+      text: selectedTool === 'text' ? textInput.trim() : undefined,
+    };
 
-      const subsMap: Record<string, Submission> = {};
-      submissionsData?.forEach((sub: Submission) => {
-        subsMap[sub.activity_id] = sub;
-      });
+    setAnnotations([...annotations, newAnnotation]);
+    if (selectedTool === 'text') setTextInput('');
+  };
 
-      setActivities(activitiesData || []);
-      setSubmissions(subsMap);
-    } catch (error) {
-      console.error('خطأ في جلب البيانات:', error);
-    } finally {
-      setLoading(false);
+  // حذف علامة معينة
+  const handleRemoveAnnotation = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setAnnotations(annotations.filter((a) => a.id !== id));
+  };
+
+  // إرسال الإجابات والتسليم
+  const handleSubmitAnswers = async () => {
+    if (annotations.length === 0) {
+      if (!window.confirm('لم تقم بإضافة أي إجابات أو علامات على الورقة. هل أنت متأكد من التسليم؟')) {
+        return;
+      }
+    }
+
+    setSubmitting(true);
+
+    const { error } = await supabase.from('submissions').insert([
+      {
+        student_id: student.id,
+        activity_id: activity.id,
+        answers_data: annotations, // إرسال الإحداثيات النسبية والعلامات
+        submitted_at: new Date().toISOString(),
+      },
+    ]);
+
+    setSubmitting(false);
+
+    if (error) {
+      alert('حدث خطأ أثناء إرسال الحل، يرجى المحاولة مرة أخرى.');
+    } else {
+      setSubmitted(true);
+      if (onSuccessSubmission) onSuccessSubmission();
     }
   };
 
-  // دالة تحويل الوقت المسجل من المعلم (start_time / end_time) إلى توقيت مكة المكرمة
-  const formatTeacherDate = (isoStr: string | undefined) => {
-    if (!isoStr) return 'غير محدد';
-    const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return 'غير محدد';
-    return d.toLocaleString('ar-SA', {
-      timeZone: 'Asia/Riyadh',
-      year: 'numeric',
-      month: 'numeric',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  // فتح صحيفة الحل التفاعلية
-  if (selectedActivity) {
-    return (
-      <div className="dir-rtl font-sans p-2 md:p-4">
-        <button
-          onClick={() => {
-            setSelectedActivity(null);
-            fetchData();
-          }}
-          className="mb-4 bg-slate-800 hover:bg-slate-700 text-white text-xs px-4 py-2 rounded-xl font-bold cursor-pointer transition-colors shadow-sm"
-        >
-          ← العودة لقائمة الأنشطة
-        </button>
-        <InteractivePdfViewer
-          student={student}
-          activity={selectedActivity}
-          onClose={() => {
-            setSelectedActivity(null);
-            fetchData();
-          }}
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="dir-rtl font-sans pb-10">
-      <main className="max-w-7xl mx-auto p-2 md:p-4">
-        {/* شريط بيانات الطالب */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 mb-6 flex justify-between items-center">
-          <div>
-            <h2 className="text-lg font-black text-slate-800">أهلاً بك الطالب: {student?.full_name}</h2>
-            <p className="text-xs text-slate-500 font-bold mt-1">
-              الصف الدراسي: {student?.classes?.name || 'الأول المتوسط'} | الهوية: {student?.national_id}
-            </p>
+    <div className="max-w-4xl mx-auto space-y-4 p-4 font-sans dir-rtl">
+      {/* شريط أدوات الحل التفاعلي */}
+      {!submitted ? (
+        <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 space-y-3 sticky top-2 z-30">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-slate-700">اختر أداة الإجابة:</span>
+              
+              <button
+                type="button"
+                onClick={() => setSelectedTool('check')}
+                className={`px-3 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1 transition-all cursor-pointer ${
+                  selectedTool === 'check'
+                    ? 'bg-emerald-600 text-white shadow-md scale-105'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Check className="w-4 h-4" /> علامة (✓)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedTool('cross')}
+                className={`px-3 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1 transition-all cursor-pointer ${
+                  selectedTool === 'cross'
+                    ? 'bg-rose-600 text-white shadow-md scale-105'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <X className="w-4 h-4" /> علامة (✕)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedTool('text')}
+                className={`px-3 py-1.5 rounded-xl font-extrabold text-xs flex items-center gap-1 transition-all cursor-pointer ${
+                  selectedTool === 'text'
+                    ? 'bg-blue-600 text-white shadow-md scale-105'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                <Type className="w-4 h-4" /> إجابة نصية
+              </button>
+            </div>
+
+            <button
+              onClick={handleSubmitAnswers}
+              disabled={submitting}
+              className="bg-[#006837] hover:bg-[#00522b] text-white px-5 py-2 rounded-xl text-xs font-black flex items-center gap-1.5 shadow-md transition-all cursor-pointer"
+            >
+              <Send className="w-4 h-4" /> {submitting ? 'جاري الإرسال...' : 'تسليم ورقة الحل'}
+            </button>
           </div>
-          <div className="bg-emerald-50 text-[#006837] border border-emerald-200 px-4 py-2 rounded-xl text-center">
-            <span className="text-xs block font-bold text-emerald-700">الأنشطة المسلمة</span>
-            <span className="text-xl font-black">{Object.keys(submissions).length} / {activities.length}</span>
+
+          {/* حقل إدخال النص عند اختيار كتابة إجابة */}
+          {selectedTool === 'text' && (
+            <div className="flex gap-2 pt-1">
+              <input
+                type="text"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder="اكتب الإجابة هنا ثم اضغط على المكان المطلوب في ورقة العمل..."
+                className="w-full px-3 py-1.5 border rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border-2 border-emerald-500 text-emerald-800 p-4 rounded-2xl flex items-center gap-3 font-bold text-sm">
+          <CheckCircle className="w-6 h-6 text-emerald-600" />
+          <span>تم تسليم الورقة بنجاح! يمكنك استعراض إجاباتك أدناه.</span>
+        </div>
+      )}
+
+      {/* ورقة العمل التفاعلية (PDF + Interactive Overlay) */}
+      <div className="flex justify-center bg-slate-800 p-4 rounded-2xl shadow-inner overflow-auto">
+        <div
+          ref={sheetRef}
+          onClick={handleSheetClick}
+          className="relative bg-white rounded shadow-2xl overflow-hidden cursor-crosshair min-w-[750px] h-[1050px] select-none"
+        >
+          {/* خلفية الورقة (PDF) */}
+          <iframe
+            src={`${activity.pdf_url}#toolbar=0&navpanes=0`}
+            title="Interactive PDF Sheet"
+            className="w-full h-full border-none pointer-events-none"
+          />
+
+          {/* طبقة الإجابات والعلامات التفاعلية */}
+          <div className="absolute inset-0 pointer-events-auto">
+            {annotations.map((ann) => (
+              <div
+                key={ann.id}
+                style={{ left: `${ann.x}%`, top: `${ann.y}%` }}
+                className="absolute z-20 -translate-x-1/2 -translate-y-1/2 group"
+              >
+                {ann.type === 'text' && (
+                  <div className="bg-blue-100/95 text-blue-900 font-black text-xs px-2.5 py-1 rounded border-2 border-blue-600 shadow-md flex items-center gap-1 whitespace-nowrap">
+                    <span>{ann.text}</span>
+                    {!submitted && (
+                      <button
+                        onClick={(e) => handleRemoveAnnotation(ann.id, e)}
+                        className="p-0.5 hover:bg-rose-200 text-rose-700 rounded transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {ann.type === 'check' && (
+                  <div className="flex items-center justify-center bg-emerald-500 text-white border-2 border-white font-black rounded-full w-7 h-7 shadow-lg relative">
+                    ✓
+                    {!submitted && (
+                      <button
+                        onClick={(e) => handleRemoveAnnotation(ann.id, e)}
+                        className="absolute -top-2 -right-2 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {ann.type === 'cross' && (
+                  <div className="flex items-center justify-center bg-rose-500 text-white border-2 border-white font-black rounded-full w-7 h-7 shadow-lg relative">
+                    ✕
+                    {!submitted && (
+                      <button
+                        onClick={(e) => handleRemoveAnnotation(ann.id, e)}
+                        className="absolute -top-2 -right-2 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
-
-        {/* قائمة الأنشطة والواجبات المتاحة */}
-        <h3 className="text-md font-bold text-slate-700 mb-4 flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-[#006837]" />
-          قائمة الأنشطة والواجبات المتاحة
-        </h3>
-
-        {loading ? (
-          <div className="text-center py-10 text-slate-500 font-bold">جاري تحميل الأنشطة...</div>
-        ) : activities.length === 0 ? (
-          <div className="bg-white rounded-2xl p-8 text-center text-slate-400 font-bold shadow-sm border border-slate-200">
-            لا توجد أنشطة متاحة حالياً لصفك الدراسي.
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {activities.map((activity) => {
-              const submission = submissions[activity.id];
-              const isSubmitted = submission !== undefined && submission !== null;
-
-              // القراءة المباشرة والدقيقة من حقول المعلم (start_time و end_time)
-              const startTimeMs = activity.start_time ? new Date(activity.start_time).getTime() : 0;
-              const endTimeMs = activity.end_time ? new Date(activity.end_time).getTime() : Infinity;
-              const now = Date.now();
-
-              const hasNotStarted = activity.start_time ? now < startTimeMs : false;
-              const isExpired = activity.end_time ? now > endTimeMs : false;
-
-              return (
-                <div key={activity.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="space-y-2">
-                    <h4 className="font-bold text-slate-800 text-base">{activity.title}</h4>
-                    
-                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600 font-semibold">
-                      <div className="flex items-center gap-1 bg-amber-50 text-amber-800 px-2.5 py-1 rounded-lg border border-amber-200">
-                        <Clock className="w-3.5 h-3.5 text-amber-600" />
-                        <span>تاريخ البداية: {formatTeacherDate(activity.start_time)}</span>
-                      </div>
-
-                      <div className="flex items-center gap-1 bg-slate-50 text-slate-700 px-2.5 py-1 rounded-lg border border-slate-200">
-                        <Clock className="w-3.5 h-3.5 text-slate-500" />
-                        <span>موعد النهاية: {formatTeacherDate(activity.end_time)}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    {/* حالة التسليم والدرجة */}
-                    {isSubmitted && (
-                      <div className="flex items-center gap-1 bg-emerald-50 text-[#006837] font-bold px-3 py-1.5 rounded-xl text-xs border border-emerald-200">
-                        <CheckCircle className="w-4 h-4 text-emerald-600" />
-                        <span>
-                          {submission.score !== undefined && submission.score !== null
-                            ? `الدرجة: ${submission.score} / ${(submission as any).max_score || 10}`
-                            : 'تم التسليم (بانتظار التصحيح)'}
-                        </span>
-                      </div>
-                    )}
-
-                    {/* تحكم الأزرار الصارم حسب وقت المعلم */}
-                    {hasNotStarted ? (
-                      <button
-                        disabled
-                        className="flex items-center gap-1 bg-amber-50 text-amber-600 border border-amber-200 font-bold px-4 py-2 rounded-xl text-xs cursor-not-allowed"
-                      >
-                        <TimerOff className="w-4 h-4" />
-                        <span>لم يبدأ الموعد بعد</span>
-                      </button>
-                    ) : isExpired && isSubmitted ? (
-                      <button
-                        disabled
-                        className="flex items-center gap-1 bg-slate-100 text-slate-600 border border-slate-200 font-bold px-4 py-2 rounded-xl text-xs cursor-not-allowed"
-                      >
-                        <Lock className="w-4 h-4" />
-                        <span>انتهى الموعد وتم التسليم</span>
-                      </button>
-                    ) : isExpired && !isSubmitted ? (
-                      <button
-                        disabled
-                        className="flex items-center gap-1 bg-rose-50 text-rose-600 border border-rose-200 font-bold px-4 py-2 rounded-xl text-xs cursor-not-allowed"
-                      >
-                        <AlertCircle className="w-4 h-4" />
-                        <span>انتهى الموعد ولم يتم التسليم</span>
-                      </button>
-                    ) : isSubmitted ? (
-                      <button
-                        disabled
-                        className="flex items-center gap-1 bg-slate-100 text-slate-500 border border-slate-200 font-bold px-4 py-2 rounded-xl text-xs cursor-not-allowed"
-                      >
-                        <Lock className="w-4 h-4" />
-                        <span>تم التسليم (مغلق)</span>
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setSelectedActivity(activity)}
-                        className="bg-[#006837] hover:bg-[#00522b] text-white font-extrabold px-5 py-2 rounded-xl text-xs transition-colors shadow-sm cursor-pointer"
-                      >
-                        بدء الحل
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </main>
+      </div>
     </div>
   );
-}
-
-export default StudentDashboard;
+};

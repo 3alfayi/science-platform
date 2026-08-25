@@ -144,7 +144,6 @@ export const TeacherDashboard: React.FC = () => {
     return now > end ? 'expired' : 'active';
   };
 
-  // فحص دقيق لثبوت تسليم الطالب
   const isSubmissionValid = (sub?: Submission) => {
     if (!sub) return false;
     if (sub.answers_data) {
@@ -720,7 +719,10 @@ export const TeacherDashboard: React.FC = () => {
                     viewSubmissionAnswers.answers_data.map((ann: any, i: number) => (
                       <div
                         key={i}
-                        style={{ left: `${ann.x}px`, top: `${ann.y}px` }}
+                        style={{
+                          left: typeof ann.x === 'number' && ann.x <= 100 ? `${ann.x}%` : `${ann.x}px`,
+                          top: typeof ann.y === 'number' && ann.y <= 100 ? `${ann.y}%` : `${ann.y}px`
+                        }}
                         className="absolute z-10 -translate-x-1/2 -translate-y-1/2"
                       >
                         {ann.type === 'text' && (

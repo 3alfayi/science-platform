@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Activity, Student, Submission } from '../../types';
-import { Check, X, Type, Send, Trash2, CheckCircle, Clock, FileText, ArrowRight, AlertCircle } from 'lucide-react';
+import { Check, X, Type, Send, Trash2, CheckCircle, Clock, FileText, ArrowRight, AlertTriangle } from 'lucide-react';
 
 interface StudentViewProps {
   student: Student;
@@ -14,8 +14,8 @@ interface StudentViewProps {
 interface Annotation {
   id: string;
   type: 'check' | 'cross' | 'text';
-  x: number;
-  y: number;
+  x: number; // نسبة مئوية %
+  y: number; // نسبة مئوية %
   text?: string;
 }
 
@@ -33,16 +33,19 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, exi
   
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  // التحقق المباشر من حالة المهلة الزمنية
+  // 🔴 حاسبة الوقت اللحظية (توقيت أم القرى)
   const now = new Date().getTime();
   const startTime = new Date(activity.start_time).getTime();
   const endTime = new Date(activity.end_time).getTime();
-  const isExpired = now > endTime;
+
   const isNotStarted = now < startTime;
+  const isExpired = now > endTime;
+  
+  // حظر الحل أو التعديل إذا انتهى الوقت أو تم التسليم أو لم يبدأ الوقت بعد
+  const isReadOnly = submitted || isExpired || isNotStarted;
 
   const handleSheetClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    // منع إضافة أي علامات إذا انتهت المهلة أو تم التسليم أو لم يبدأ الوقت
-    if (!sheetRef.current || submitted || isExpired || isNotStarted) return;
+    if (!sheetRef.current || isReadOnly) return;
 
     const rect = sheetRef.current.getBoundingClientRect();
     const xPct = Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(2));
@@ -67,13 +70,14 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, exi
 
   const handleRemoveAnnotation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (submitted || isExpired) return;
+    if (isReadOnly) return;
     setAnnotations(annotations.filter((a) => a.id !== id));
   };
 
   const handleSubmitAnswers = async () => {
-    if (isExpired) {
-      alert('عذراً، انتهت المهلة الزمنية المحددة للنشاط ولا يمكنك تسليم الحل الآن.');
+    const currentCheckNow = new Date().getTime();
+    if (currentCheckNow > endTime) {
+      alert('عذراً، انتهت المهلة الزمنية المحددة للنشاط للتو ولا يمكنك إرسال الحل!');
       return;
     }
 
@@ -85,7 +89,6 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, exi
 
     setSubmitting(true);
 
-    // استخدام upsert لمنع خطأ duplicate key والتحديث المباشر للإجابة
     const { error } = await supabase.from('submissions').upsert(
       [
         {
@@ -124,16 +127,16 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, exi
         </button>
       )}
 
-      {/* التنبيه بحالة الوقت والأدوات */}
+      {/* شريط التنبيه الحصري بحالة المهلة */}
       {isExpired ? (
-        <div className="bg-rose-50 border-2 border-rose-400 text-rose-800 p-4 rounded-2xl flex items-center gap-3 font-bold text-sm">
-          <AlertCircle className="w-6 h-6 text-rose-600" />
-          <span>⏰ انتهت المهلة الزمنية المتاحة لحل هذا النشاط بتوقيت أم القرى. (عرض ورقة الإجابة فقط)</span>
+        <div className="bg-rose-50 border-2 border-rose-500 text-rose-800 p-4 rounded-2xl flex items-center gap-3 font-extrabold text-sm shadow-sm">
+          <AlertTriangle className="w-6 h-6 text-rose-600 flex-shrink-0" />
+          <span>انتهت المهلة الزمنية المحددة لحل هذا النشاط بتوقيت أم القرى. يتم الآن عرض إجاباتك السابقة/الورقة فقط بدون إمكانية التعديل.</span>
         </div>
       ) : isNotStarted ? (
-        <div className="bg-blue-50 border-2 border-blue-400 text-blue-800 p-4 rounded-2xl flex items-center gap-3 font-bold text-sm">
-          <Clock className="w-6 h-6 text-blue-600" />
-          <span>⏳ لم يبدأ وقت هذا النشاط بعد. يرجى الانتظار حتى حلول موعد البداية.</span>
+        <div className="bg-blue-50 border-2 border-blue-500 text-blue-800 p-4 rounded-2xl flex items-center gap-3 font-extrabold text-sm shadow-sm">
+          <Clock className="w-6 h-6 text-blue-600 flex-shrink-0" />
+          <span>لم يبدأ موعد هذا النشاط بعد. يرجى الانتظار حتى الوقت المحدد.</span>
         </div>
       ) : !submitted ? (
         <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 space-y-3 sticky top-2 z-30">
@@ -200,19 +203,19 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, exi
           )}
         </div>
       ) : (
-        <div className="bg-emerald-50 border-2 border-emerald-500 text-emerald-800 p-4 rounded-2xl flex items-center gap-3 font-bold text-sm">
-          <CheckCircle className="w-6 h-6 text-emerald-600" />
-          <span>تم تسليم الورقة بنجاح! يمكنك استعراض إجاباتك أدناه.</span>
+        <div className="bg-emerald-50 border-2 border-emerald-500 text-emerald-800 p-4 rounded-2xl flex items-center gap-3 font-extrabold text-sm">
+          <CheckCircle className="w-6 h-6 text-emerald-600 flex-shrink-0" />
+          <span>تم تسليم ورقة الحل بنجاح! يمكنك استعراض إجاباتك أدناه.</span>
         </div>
       )}
 
-      {/* ورقة العمل التفاعلية */}
+      {/* ورقة العمل التفاعلية (مقيدة عند الانتهاء) */}
       <div className="flex justify-center bg-slate-800 p-4 rounded-2xl shadow-inner overflow-auto">
         <div
           ref={sheetRef}
           onClick={handleSheetClick}
           className={`relative bg-white rounded shadow-2xl overflow-hidden min-w-[750px] h-[1050px] select-none ${
-            submitted || isExpired || isNotStarted ? 'cursor-default' : 'cursor-crosshair'
+            isReadOnly ? 'cursor-not-allowed' : 'cursor-crosshair'
           }`}
         >
           <iframe
@@ -221,56 +224,61 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, exi
             className="w-full h-full border-none pointer-events-none"
           />
 
-          <div className="absolute inset-0 pointer-events-auto">
-            {annotations.map((ann) => (
-              <div
-                key={ann.id}
-                style={{ left: `${ann.x}%`, top: `${ann.y}%` }}
-                className="absolute z-20 -translate-x-1/2 -translate-y-1/2 group"
-              >
-                {ann.type === 'text' && (
-                  <div className="bg-blue-100/95 text-blue-900 font-black text-xs px-2.5 py-1 rounded border-2 border-blue-600 shadow-md flex items-center gap-1 whitespace-nowrap">
-                    <span>{ann.text}</span>
-                    {!submitted && !isExpired && (
-                      <button
-                        onClick={(e) => handleRemoveAnnotation(ann.id, e)}
-                        className="p-0.5 hover:bg-rose-200 text-rose-700 rounded transition-colors"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                )}
+          <div className={`absolute inset-0 ${isReadOnly ? 'pointer-events-none' : 'pointer-events-auto'}`}>
+            {annotations.map((ann) => {
+              const leftPos = typeof ann.x === 'number' && ann.x <= 100 ? `${ann.x}%` : `${ann.x}px`;
+              const topPos = typeof ann.y === 'number' && ann.y <= 100 ? `${ann.y}%` : `${ann.y}px`;
 
-                {ann.type === 'check' && (
-                  <div className="flex items-center justify-center bg-emerald-500 text-white border-2 border-white font-black rounded-full w-7 h-7 shadow-lg relative">
-                    ✓
-                    {!submitted && !isExpired && (
-                      <button
-                        onClick={(e) => handleRemoveAnnotation(ann.id, e)}
-                        className="absolute -top-2 -right-2 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                )}
+              return (
+                <div
+                  key={ann.id}
+                  style={{ left: leftPos, top: topPos }}
+                  className="absolute z-20 -translate-x-1/2 -translate-y-1/2 group"
+                >
+                  {ann.type === 'text' && (
+                    <div className="bg-blue-100/95 text-blue-900 font-black text-xs px-2.5 py-1 rounded border-2 border-blue-600 shadow-md flex items-center gap-1 whitespace-nowrap">
+                      <span>{ann.text}</span>
+                      {!isReadOnly && (
+                        <button
+                          onClick={(e) => handleRemoveAnnotation(ann.id, e)}
+                          className="p-0.5 hover:bg-rose-200 text-rose-700 rounded transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
 
-                {ann.type === 'cross' && (
-                  <div className="flex items-center justify-center bg-rose-500 text-white border-2 border-white font-black rounded-full w-7 h-7 shadow-lg relative">
-                    ✕
-                    {!submitted && !isExpired && (
-                      <button
-                        onClick={(e) => handleRemoveAnnotation(ann.id, e)}
-                        className="absolute -top-2 -right-2 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ))}
+                  {ann.type === 'check' && (
+                    <div className="flex items-center justify-center bg-emerald-500 text-white border-2 border-white font-black rounded-full w-7 h-7 shadow-lg relative">
+                      ✓
+                      {!isReadOnly && (
+                        <button
+                          onClick={(e) => handleRemoveAnnotation(ann.id, e)}
+                          className="absolute -top-2 -right-2 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {ann.type === 'cross' && (
+                    <div className="flex items-center justify-center bg-rose-500 text-white border-2 border-white font-black rounded-full w-7 h-7 shadow-lg relative">
+                      ✕
+                      {!isReadOnly && (
+                        <button
+                          onClick={(e) => handleRemoveAnnotation(ann.id, e)}
+                          className="absolute -top-2 -right-2 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

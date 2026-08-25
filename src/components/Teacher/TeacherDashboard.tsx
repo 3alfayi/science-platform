@@ -144,6 +144,16 @@ export const TeacherDashboard: React.FC = () => {
     return now > end ? 'expired' : 'active';
   };
 
+  // فحص دقيق لثبوت تسليم الطالب
+  const isSubmissionValid = (sub?: Submission) => {
+    if (!sub) return false;
+    if (sub.answers_data) {
+      if (Array.isArray(sub.answers_data) && sub.answers_data.length > 0) return true;
+      if (typeof sub.answers_data === 'object' && Object.keys(sub.answers_data).length > 0) return true;
+    }
+    return sub.submitted_at !== undefined && sub.submitted_at !== null;
+  };
+
   const calculateStudentBalancedScore = (studentId: string, targetMax: number) => {
     const studentSubs = submissions.filter(
       (s) => s.student_id === studentId && s.score !== null && s.score !== undefined
@@ -929,14 +939,14 @@ export const TeacherDashboard: React.FC = () => {
                         );
                         const isExpired = getActivityTimeStatus(act.end_time) === 'expired';
                         const maxS = (sub as any)?.max_score || 10;
-                        const hasAnswers = sub && Array.isArray(sub.answers_data) && sub.answers_data.length > 0;
+                        const hasSubmitted = isSubmissionValid(sub);
 
                         return (
                           <tr key={act.id} className="border-b border-slate-200">
                             <td className="p-2 border border-slate-200 text-center font-mono">{i + 1}</td>
                             <td className="p-2 border border-slate-200 font-bold">{act.title}</td>
                             <td className="p-2 border border-slate-200 text-center">
-                              {hasAnswers ? (
+                              {hasSubmitted ? (
                                 <span className="text-emerald-700 font-bold">✅ تم التسليم</span>
                               ) : isExpired ? (
                                 <span className="text-rose-600 font-bold">⏰ انتهى الوقت ولم يتم التسليم</span>
@@ -1123,16 +1133,16 @@ export const TeacherDashboard: React.FC = () => {
                       const currentMax = editingScores[itemKey]?.maxScore ?? (sub as any)?.max_score ?? 10;
                       
                       const timeStatus = getActivityTimeStatus(act.end_time);
-                      const hasAnswers = sub && Array.isArray(sub.answers_data) && sub.answers_data.length > 0;
+                      const hasSubmitted = isSubmissionValid(sub);
 
                       return (
                         <tr key={itemKey} className="hover:bg-slate-50 transition-colors">
                           <td className="p-4 font-bold text-slate-800">{st.full_name}</td>
                           <td className="p-4 text-[#006837] font-bold">{act.title}</td>
                           <td className="p-4 text-center">
-                            {hasAnswers ? (
+                            {hasSubmitted ? (
                               <button
-                                onClick={() => setViewSubmissionAnswers(sub)}
+                                onClick={() => setViewSubmissionAnswers(sub!)}
                                 className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-[#006837] border border-emerald-200 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-colors cursor-pointer"
                               >
                                 <Eye className="w-3.5 h-3.5" /> ✅ تم التسليم (عرض الورقة)

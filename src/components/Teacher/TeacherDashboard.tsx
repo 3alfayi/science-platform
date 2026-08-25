@@ -24,7 +24,9 @@ import {
   TrendingUp,
   Clock,
   AlertCircle,
-  Calendar
+  Calendar,
+  ClipboardList,
+  FileSpreadsheet
 } from 'lucide-react';
 
 export const TeacherDashboard: React.FC = () => {
@@ -45,10 +47,17 @@ export const TeacherDashboard: React.FC = () => {
 
   const [newClassName, setNewClassName] = useState('');
 
+  // الإضافة الفردية
+  const [studentAddMode, setStudentAddMode] = useState<'single' | 'paste' | 'file'>('single');
   const [fullName, setFullName] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [studentClassId, setStudentClassId] = useState('');
+
+  // الإضافة الجماعية
+  const [bulkTextData, setBulkTextData] = useState('');
+  const [bulkClassId, setBulkClassId] = useState('');
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
 
   const [actTitle, setActTitle] = useState('');
   const [actClassId, setActClassId] = useState('');
@@ -269,6 +278,7 @@ export const TeacherDashboard: React.FC = () => {
     }
   };
 
+  // إضافة طالب فردي
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName || !nationalId || !studentClassId) {
@@ -294,6 +304,107 @@ export const TeacherDashboard: React.FC = () => {
       setParentPhone('');
       fetchStudents();
     }
+  };
+
+  // إضافة جماعية عن طريق اللصق المباشر
+  const handleBulkAddPaste = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkClassId || !bulkTextData.trim()) {
+      setMsg({ type: 'error', text: 'يرجى اختيار الصف ولصق بيانات الطلاب.' });
+      return;
+    }
+
+    setLoading(true);
+    const lines = bulkTextData.trim().split('\n');
+    const studentsToInsert: any[] = [];
+
+    for (let line of lines) {
+      if (!line.trim()) continue;
+      // تقسيم السطر إما باستخدام Tab (من Excel) أو فاصلة أو مسافة
+      const parts = line.split(/\t|,|;/).map((p) => p.trim());
+      if (parts.length >= 2) {
+        studentsToInsert.push({
+          full_name: parts[0],
+          national_id: parts[1],
+          parent_phone: parts[2] || null,
+          class_id: bulkClassId,
+        });
+      }
+    }
+
+    if (studentsToInsert.length === 0) {
+      setLoading(false);
+      setMsg({ type: 'error', text: 'تعذر التعرف على بيانات الطلاب، تأكد من التنسيق (الاسم ثم رقم الهوية).' });
+      return;
+    }
+
+    const { error } = await supabase.from('students').insert(studentsToInsert);
+    setLoading(false);
+
+    if (error) {
+      setMsg({ type: 'error', text: 'حدث خطأ أثناء الإضافة الجماعية، قد يكون بعض أرقام الهويات مكررة.' });
+    } else {
+      setMsg({ type: 'success', text: `تم استيراد وإضافة ${studentsToInsert.length} طالب بنجاح!` });
+      setBulkTextData('');
+      fetchStudents();
+    }
+  };
+
+  // إضافة جماعية عن طريق قراءة ملف CSV
+  const handleBulkAddFile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkClassId || !bulkFile) {
+      setMsg({ type: 'error', text: 'يرجى اختيار الصف وتحديد ملف CSV.' });
+      return;
+    }
+
+    setLoading(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const content = event.target?.result as string;
+      if (!content) {
+        setLoading(false);
+        setMsg({ type: 'error', text: 'الملف فارغ أو يتعذر قراءته.' });
+        return;
+      }
+
+      const lines = content.split(/\r\n|\n/);
+      const studentsToInsert: any[] = [];
+
+      for (let line of lines) {
+        if (!line.trim()) continue;
+        const parts = line.split(/,|\t|;/).map((p) => p.trim().replace(/^"|"$/g, ''));
+        // تجاوز ترويسة الجدول إن وجدت
+        if (parts[0].includes('اسم') || parts[1]?.includes('هوية')) continue;
+        
+        if (parts.length >= 2) {
+          studentsToInsert.push({
+            full_name: parts[0],
+            national_id: parts[1],
+            parent_phone: parts[2] || null,
+            class_id: bulkClassId,
+          });
+        }
+      }
+
+      if (studentsToInsert.length === 0) {
+        setLoading(false);
+        setMsg({ type: 'error', text: 'تعذر قراءة بيانات من الملف، تأكد من ترتيب الأعمدة.' });
+        return;
+      }
+
+      const { error } = await supabase.from('students').insert(studentsToInsert);
+      setLoading(false);
+
+      if (error) {
+        setMsg({ type: 'error', text: 'حدث خطأ أثناء الاستيراد من الملف، قد تكون بعض الهويات مكررة.' });
+      } else {
+        setMsg({ type: 'success', text: `تم استيراد وإضافة ${studentsToInsert.length} طالب بنجاح!` });
+        setBulkFile(null);
+        fetchStudents();
+      }
+    };
+    reader.readAsText(bulkFile, 'UTF-8');
   };
 
   const handleAddActivity = async (e: React.FormEvent) => {
@@ -1551,54 +1662,171 @@ export const TeacherDashboard: React.FC = () => {
                 </form>
               </div>
 
+              {/* 🟢 كارت تسجيل الطلاب الفردي والجماعي المُحدّث */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <div className="flex items-center gap-2 font-bold text-slate-800 text-lg mb-4">
-                  <Users className="w-5 h-5 text-[#006837]" />
-                  <h3>تسجيل طالب جديد</h3>
+                <div className="flex items-center justify-between font-bold text-slate-800 text-lg mb-3">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-5 h-5 text-[#006837]" />
+                    <h3>تسجيل الطلاب</h3>
+                  </div>
                 </div>
-                <form onSubmit={handleAddStudent} className="space-y-3">
-                  <input
-                    type="text"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="اسم الطالب الثلاثي"
-                    className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] text-sm font-semibold"
-                    required
-                  />
-                  <input
-                    type="text"
-                    value={nationalId}
-                    onChange={(e) => setNationalId(e.target.value)}
-                    placeholder="رقم الهوية الوطنية"
-                    className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] text-sm font-semibold"
-                    required
-                  />
-                  <select
-                    value={studentClassId}
-                    onChange={(e) => setStudentClassId(e.target.value)}
-                    className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] bg-white text-sm font-semibold"
-                    required
-                  >
-                    <option value="">اختر الصف...</option>
-                    {classes.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    value={parentPhone}
-                    onChange={(e) => setParentPhone(e.target.value)}
-                    placeholder="جوال ولي الأمر (05xxxxxxxx)"
-                    className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] text-sm font-semibold"
-                  />
+
+                {/* شريط خيارات الإضافة (فردي / لصق Excel / ملف CSV) */}
+                <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-4 text-xs font-bold">
                   <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 rounded-xl transition-colors text-sm cursor-pointer"
+                    type="button"
+                    onClick={() => setStudentAddMode('single')}
+                    className={`flex-1 py-1.5 rounded-lg transition-all ${
+                      studentAddMode === 'single'
+                        ? 'bg-white text-[#006837] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
                   >
-                    حفظ الطالب
+                    فردي
                   </button>
-                </form>
+                  <button
+                    type="button"
+                    onClick={() => setStudentAddMode('paste')}
+                    className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 ${
+                      studentAddMode === 'paste'
+                        ? 'bg-white text-[#006837] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <ClipboardList className="w-3.5 h-3.5" /> لصق متعدد
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStudentAddMode('file')}
+                    className={`flex-1 py-1.5 rounded-lg transition-all flex items-center justify-center gap-1 ${
+                      studentAddMode === 'file'
+                        ? 'bg-white text-[#006837] shadow-sm'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <FileSpreadsheet className="w-3.5 h-3.5" /> ملف Excel
+                  </button>
+                </div>
+
+                {/* 1. نموذج الإضافة الفردية */}
+                {studentAddMode === 'single' && (
+                  <form onSubmit={handleAddStudent} className="space-y-3">
+                    <input
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder="اسم الطالب الثلاثي"
+                      className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] text-sm font-semibold"
+                      required
+                    />
+                    <input
+                      type="text"
+                      value={nationalId}
+                      onChange={(e) => setNationalId(e.target.value)}
+                      placeholder="رقم الهوية الوطنية"
+                      className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] text-sm font-semibold"
+                      required
+                    />
+                    <select
+                      value={studentClassId}
+                      onChange={(e) => setStudentClassId(e.target.value)}
+                      className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] bg-white text-sm font-semibold"
+                      required
+                    >
+                      <option value="">اختر الصف...</option>
+                      {classes.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={parentPhone}
+                      onChange={(e) => setParentPhone(e.target.value)}
+                      placeholder="جوال ولي الأمر (05xxxxxxxx)"
+                      className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] text-sm font-semibold"
+                    />
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2 rounded-xl transition-colors text-sm cursor-pointer"
+                    >
+                      حفظ الطالب
+                    </button>
+                  </form>
+                )}
+
+                {/* 2. نموذج الإضافة باللصق المباشر */}
+                {studentAddMode === 'paste' && (
+                  <form onSubmit={handleBulkAddPaste} className="space-y-3">
+                    <select
+                      value={bulkClassId}
+                      onChange={(e) => setBulkClassId(e.target.value)}
+                      className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] bg-white text-sm font-semibold"
+                      required
+                    >
+                      <option value="">اختر الصف الموحد للطلاب...</option>
+                      {classes.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-slate-500 font-bold">
+                        انسخ الأعمدة من Excel: (الاسم [Tab] رقم الهوية [Tab] رقم الجوال)
+                      </label>
+                      <textarea
+                        rows={5}
+                        value={bulkTextData}
+                        onChange={(e) => setBulkTextData(e.target.value)}
+                        placeholder={`محمد علي القحطاني\t1098765432\t0501234567\nسعد عبدالله الشمراني\t1012345678\t0559876543`}
+                        className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] text-xs font-mono leading-relaxed"
+                        required
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-[#006837] hover:bg-[#00522b] text-white font-bold py-2 rounded-xl transition-colors text-sm cursor-pointer"
+                    >
+                      معالجة ولصق الطلاب
+                    </button>
+                  </form>
+                )}
+
+                {/* 3. نموذج الاستيراد من ملف Excel/CSV */}
+                {studentAddMode === 'file' && (
+                  <form onSubmit={handleBulkAddFile} className="space-y-3">
+                    <select
+                      value={bulkClassId}
+                      onChange={(e) => setBulkClassId(e.target.value)}
+                      className="w-full px-3 py-1.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] bg-white text-sm font-semibold"
+                      required
+                    >
+                      <option value="">اختر الصف الموحد للطلاب...</option>
+                      {classes.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                    <div className="space-y-1">
+                      <label className="text-[11px] text-slate-500 font-bold block">
+                        ارفق ملف CSV (يحتوي على: الاسم، رقم الهوية، رقم الجوال):
+                      </label>
+                      <input
+                        type="file"
+                        accept=".csv"
+                        onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
+                        className="w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-blue-50 file:text-blue-700 font-bold cursor-pointer"
+                        required
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-blue-700 hover:bg-blue-800 text-white font-bold py-2 rounded-xl transition-colors text-sm cursor-pointer"
+                    >
+                      استيراد الطلاب من الملف
+                    </button>
+                  </form>
+                )}
               </div>
 
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">

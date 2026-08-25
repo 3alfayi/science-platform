@@ -35,7 +35,8 @@ export const TeacherDashboard: React.FC = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [selectedClass, setSelectedClass] = useState<string>('all');
-  
+  const [selectedActivity, setSelectedActivity] = useState<string>('all');
+
   const [targetMaxScore, setTargetMaxScore] = useState<number>(30);
 
   const [principalPhone, setPrincipalPhone] = useState<string>(() => localStorage.getItem('principalPhone') || '0500000000');
@@ -69,7 +70,7 @@ export const TeacherDashboard: React.FC = () => {
 
   const [editingScores, setEditingScores] = useState<Record<string, { score: any; maxScore: any }>>({});
   const [activeEditId, setActiveEditId] = useState<string | null>(null);
-  
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -552,15 +553,18 @@ export const TeacherDashboard: React.FC = () => {
 
   const currentAnalytics = calculateGradeAnalytics(selectedClass);
 
-  // فرز الأنشطة أبجدياً بحسب العنوان لاستخدامها في العرض
   const sortedActivities = [...activities].sort((a, b) => 
     a.title.localeCompare(b.title, 'ar')
   );
 
   const fullGradingList: { student: Student; activity: Activity; submission?: Submission }[] = [];
   filteredStudents.forEach((st) => {
-    // ترتيب الأنشطة أبجدياً داخل قائمة التقييم الشامل
-    const classActs = sortedActivities.filter((a) => a.class_id === st.class_id);
+    let classActs = sortedActivities.filter((a) => a.class_id === st.class_id);
+    
+    if (selectedActivity !== 'all') {
+      classActs = classActs.filter((a) => a.id === selectedActivity);
+    }
+
     classActs.forEach((act) => {
       const sub = submissions.find((s) => s.student_id === st.id && s.activity_id === act.id);
       fullGradingList.push({ student: st, activity: act, submission: sub });
@@ -1097,22 +1101,43 @@ export const TeacherDashboard: React.FC = () => {
       <div className="print:hidden">
         {activeTab === 'grading' && (
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <h3 className="font-bold text-slate-800 text-xl flex items-center gap-2">
                 <Award className="w-5 h-5 text-[#006837]" /> رصد التصحيح وحالة الوقت الاحترافية
               </h3>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-semibold text-slate-600">تصفية الصف:</span>
-                <select
-                  value={selectedClass}
-                  onChange={(e) => setSelectedClass(e.target.value)}
-                  className="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold text-sm outline-none"
-                >
-                  <option value="all">جميع الصفوف</option>
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-600">تصفية الصف:</span>
+                  <select
+                    value={selectedClass}
+                    onChange={(e) => {
+                      setSelectedClass(e.target.value);
+                      setSelectedActivity('all');
+                    }}
+                    className="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold text-sm outline-none"
+                  >
+                    <option value="all">جميع الصفوف</option>
+                    {classes.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-slate-600">تصفية النشاط:</span>
+                  <select
+                    value={selectedActivity}
+                    onChange={(e) => setSelectedActivity(e.target.value)}
+                    className="px-3 py-1.5 border rounded-lg bg-slate-50 font-semibold text-sm outline-none"
+                  >
+                    <option value="all">جميع الأنشطة</option>
+                    {sortedActivities
+                      .filter((a) => selectedClass === 'all' || a.class_id === selectedClass)
+                      .map((act) => (
+                        <option key={act.id} value={act.id}>{act.title}</option>
+                      ))}
+                  </select>
+                </div>
               </div>
             </div>
             <div className="overflow-x-auto">
@@ -1129,7 +1154,7 @@ export const TeacherDashboard: React.FC = () => {
                 <tbody className="divide-y divide-slate-100 text-sm font-semibold">
                   {fullGradingList.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-slate-400">لا توجد أنشطة مطروحة للطلاب المسجلين حالياً</td>
+                      <td colSpan={5} className="p-8 text-center text-slate-400">لا توجد أنشطة مطروحة للطلاب المسجلين حالياً بحسب الفلترة المحددة</td>
                     </tr>
                   ) : (
                     fullGradingList.map(({ student: st, activity: act, submission: sub }) => {

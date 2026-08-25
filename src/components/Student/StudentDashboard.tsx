@@ -65,7 +65,6 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
 
     setSubmitting(true);
 
-    // إرسال البيانات مع تحديد القيم الأساسية بوضوح لمنع أخطاء Supabase
     const { error } = await supabase.from('submissions').insert([
       {
         student_id: student.id,
@@ -309,7 +308,12 @@ export const StudentDashboard: React.FC<{ student: Student }> = ({ student }) =>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {activities.map((act) => {
               const sub = submissions.find((s) => s.activity_id === act.id);
-              const isExpired = new Date().getTime() > new Date(act.end_time).getTime();
+              const now = new Date().getTime();
+              const start = new Date(act.start_time).getTime();
+              const end = new Date(act.end_time).getTime();
+
+              const isNotStarted = now < start;
+              const isExpired = now > end;
               const isSubmitted = !!sub;
 
               return (
@@ -319,6 +323,10 @@ export const StudentDashboard: React.FC<{ student: Student }> = ({ student }) =>
                     {isSubmitted ? (
                       <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-extrabold inline-flex items-center gap-1">
                         <CheckCircle className="w-3.5 h-3.5" /> تم التسليم
+                      </span>
+                    ) : isNotStarted ? (
+                      <span className="px-2.5 py-1 bg-blue-100 text-blue-800 rounded-lg text-xs font-extrabold inline-flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" /> لم يبدأ بعد
                       </span>
                     ) : isExpired ? (
                       <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-lg text-xs font-extrabold inline-flex items-center gap-1">
@@ -332,23 +340,33 @@ export const StudentDashboard: React.FC<{ student: Student }> = ({ student }) =>
                   </div>
 
                   <div className="text-xs text-slate-500 font-mono space-y-1">
-                    <p>ينتهي في: {new Date(act.end_time).toLocaleString('ar-SA')}</p>
+                    <p>يبدأ: {new Date(act.start_time).toLocaleString('ar-SA')}</p>
+                    <p>ينتهي: {new Date(act.end_time).toLocaleString('ar-SA')}</p>
                     {sub?.score !== null && sub?.score !== undefined && (
                       <p className="text-[#006837] font-black text-sm pt-1">الدرجة المكتسبة: {sub.score} / {(sub as any).max_score || 10}</p>
                     )}
                   </div>
 
                   <button
+                    disabled={isNotStarted || (isExpired && !isSubmitted)}
                     onClick={() => setSelectedActivity(act)}
-                    className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
                       isSubmitted
-                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 cursor-pointer'
+                        : isNotStarted
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                         : isExpired
                         ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-[#006837] text-white hover:bg-[#00522b] shadow-md'
+                        : 'bg-[#006837] text-white hover:bg-[#00522b] shadow-md cursor-pointer'
                     }`}
                   >
-                    {isSubmitted ? 'استعراض الإجابات' : isExpired ? 'انتهت فترة الحل' : 'بدء حل ورقة العمل التفاعلية'}
+                    {isSubmitted
+                      ? 'استعراض الإجابات'
+                      : isNotStarted
+                      ? 'لم يبدأ الوقت المحدد للحل بعد'
+                      : isExpired
+                      ? 'انتهت فترة الحل'
+                      : 'بدء حل ورقة العمل التفاعلية'}
                   </button>
                 </div>
               );

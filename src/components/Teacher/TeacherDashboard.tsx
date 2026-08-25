@@ -47,17 +47,23 @@ export const TeacherDashboard: React.FC = () => {
 
   const [newClassName, setNewClassName] = useState('');
 
-  // الإضافة الفردية
+  // الإضافة الفردية والجماعية
   const [studentAddMode, setStudentAddMode] = useState<'single' | 'paste' | 'file'>('single');
   const [fullName, setFullName] = useState('');
   const [nationalId, setNationalId] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [studentClassId, setStudentClassId] = useState('');
 
-  // الإضافة الجماعية
   const [bulkTextData, setBulkTextData] = useState('');
   const [bulkClassId, setBulkClassId] = useState('');
   const [bulkFile, setBulkFile] = useState<File | null>(null);
+
+  // تعديل بيانات الطالب
+  const [editingStudent, setEditingStudent] = useState<Student | null>(null);
+  const [editStudentFullName, setEditStudentFullName] = useState('');
+  const [editStudentNationalId, setEditStudentNationalId] = useState('');
+  const [editStudentClassId, setEditStudentClassId] = useState('');
+  const [editStudentParentPhone, setEditStudentParentPhone] = useState('');
 
   const [actTitle, setActTitle] = useState('');
   const [actClassId, setActClassId] = useState('');
@@ -145,6 +151,40 @@ export const TeacherDashboard: React.FC = () => {
     setEditStartTimeOnly(startObj.time);
     setEditEndDate(endObj.date);
     setEditEndTimeOnly(endObj.time);
+  };
+
+  const openEditStudentModal = (st: Student) => {
+    setEditingStudent(st);
+    setEditStudentFullName(st.full_name);
+    setEditStudentNationalId(st.national_id);
+    setEditStudentClassId(st.class_id || '');
+    setEditStudentParentPhone(st.parent_phone || '');
+  };
+
+  const handleUpdateStudent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingStudent) return;
+
+    setLoading(true);
+    const { error } = await supabase
+      .from('students')
+      .update({
+        full_name: editStudentFullName.trim(),
+        national_id: editStudentNationalId.trim(),
+        class_id: editStudentClassId,
+        parent_phone: editStudentParentPhone.trim() || null,
+      })
+      .eq('id', editingStudent.id);
+
+    setLoading(false);
+
+    if (!error) {
+      setMsg({ type: 'success', text: 'تم تحديث بيانات الطالب بنجاح!' });
+      setEditingStudent(null);
+      fetchStudents();
+    } else {
+      setMsg({ type: 'error', text: 'حدث خطأ أثناء تعديل بيانات الطالب، قد يكون رقم الهوية مستخدم لمُدخل آخر.' });
+    }
   };
 
   const getActivityTimeStatus = (endTimeStr: string) => {
@@ -306,7 +346,6 @@ export const TeacherDashboard: React.FC = () => {
     }
   };
 
-  // إضافة جماعية عن طريق اللصق المباشر
   const handleBulkAddPaste = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkClassId || !bulkTextData.trim()) {
@@ -319,9 +358,29 @@ export const TeacherDashboard: React.FC = () => {
     const studentsToInsert: any[] = [];
 
     for (let line of lines) {
-      if (!line.trim()) continue;
-      // تقسيم السطر إما باستخدام Tab (من Excel) أو فاصلة أو مسافة
-      const parts = line.split(/\t|,|;/).map((p) => p.trim());
+      const cleanLine = line.trim();
+      if (!cleanLine) continue;
+
+      const numberMatches = cleanLine.match(/\b\d{9,12}\b/g);
+
+      if (numberMatches && numberMatches.length >= 1) {
+        const nationalIdFound = numberMatches[0];
+        const parentPhoneFound = numberMatches[1] || null;
+
+        const namePart = cleanLine.split(nationalIdFound)[0].replace(/[\t,;]/g, ' ').trim();
+
+        if (namePart && nationalIdFound) {
+          studentsToInsert.push({
+            full_name: namePart,
+            national_id: nationalIdFound,
+            parent_phone: parentPhoneFound,
+            class_id: bulkClassId,
+          });
+          continue;
+        }
+      }
+
+      const parts = cleanLine.split(/\t|,|;/).map((p) => p.trim()).filter(Boolean);
       if (parts.length >= 2) {
         studentsToInsert.push({
           full_name: parts[0],
@@ -334,7 +393,7 @@ export const TeacherDashboard: React.FC = () => {
 
     if (studentsToInsert.length === 0) {
       setLoading(false);
-      setMsg({ type: 'error', text: 'تعذر التعرف على بيانات الطلاب، تأكد من التنسيق (الاسم ثم رقم الهوية).' });
+      setMsg({ type: 'error', text: 'تعذر التعرف على بيانات الطلاب، تأكد من وجود اسم ورقم هوية لكل طالب.' });
       return;
     }
 
@@ -344,13 +403,12 @@ export const TeacherDashboard: React.FC = () => {
     if (error) {
       setMsg({ type: 'error', text: 'حدث خطأ أثناء الإضافة الجماعية، قد يكون بعض أرقام الهويات مكررة.' });
     } else {
-      setMsg({ type: 'success', text: `تم استيراد وإضافة ${studentsToInsert.length} طالب بنجاح!` });
+      setMsg({ type: 'success', text: `تم إضافة ${studentsToInsert.length} طالب بنجاح!` });
       setBulkTextData('');
       fetchStudents();
     }
   };
 
-  // إضافة جماعية عن طريق قراءة ملف CSV
   const handleBulkAddFile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bulkClassId || !bulkFile) {
@@ -374,7 +432,6 @@ export const TeacherDashboard: React.FC = () => {
       for (let line of lines) {
         if (!line.trim()) continue;
         const parts = line.split(/,|\t|;/).map((p) => p.trim().replace(/^"|"$/g, ''));
-        // تجاوز ترويسة الجدول إن وجدت
         if (parts[0].includes('اسم') || parts[1]?.includes('هوية')) continue;
         
         if (parts.length >= 2) {
@@ -688,6 +745,85 @@ export const TeacherDashboard: React.FC = () => {
         <div className="p-4 rounded-xl flex items-center justify-between font-bold text-sm bg-emerald-50 text-emerald-800 border border-emerald-200 print:hidden">
           <span>{msg.text}</span>
           <button onClick={() => setMsg(null)}>×</button>
+        </div>
+      )}
+
+      {/* 🟢 نافذة تعديل بيانات الطالب */}
+      {editingStudent && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
+          <div className="bg-white rounded-2xl p-6 shadow-2xl max-w-md w-full space-y-4">
+            <div className="flex justify-between items-center border-b pb-3">
+              <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2">
+                <Edit className="w-5 h-5 text-[#006837]" /> تعديل بيانات الطالب
+              </h3>
+              <button onClick={() => setEditingStudent(null)} className="p-1 text-slate-400 hover:text-slate-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateStudent} className="space-y-4 text-xs font-bold">
+              <div>
+                <label className="block text-slate-700 mb-1">اسم الطالب الثلاثي</label>
+                <input
+                  type="text"
+                  value={editStudentFullName}
+                  onChange={(e) => setEditStudentFullName(e.target.value)}
+                  className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837]"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-slate-700 mb-1">رقم الهوية الوطنية</label>
+                <input
+                  type="text"
+                  value={editStudentNationalId}
+                  onChange={(e) => setEditStudentNationalId(e.target.value)}
+                  className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] font-mono"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-slate-700 mb-1">الصف الدراسي</label>
+                <select
+                  value={editStudentClassId}
+                  onChange={(e) => setEditStudentClassId(e.target.value)}
+                  className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] bg-white"
+                  required
+                >
+                  <option value="">اختر الصف...</option>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-slate-700 mb-1">جوال ولي الأمر</label>
+                <input
+                  type="text"
+                  value={editStudentParentPhone}
+                  onChange={(e) => setEditStudentParentPhone(e.target.value)}
+                  placeholder="05xxxxxxxx"
+                  className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] font-mono"
+                />
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingStudent(null)}
+                  className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl font-bold"
+                >
+                  إلغاء
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-2/3 bg-[#006837] hover:bg-[#00522b] text-white py-2.5 rounded-xl font-bold transition-colors cursor-pointer"
+                >
+                  حفظ التعديلات
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
@@ -1510,6 +1646,14 @@ export const TeacherDashboard: React.FC = () => {
                             </td>
                             <td className="p-4 text-center">
                               <div className="flex justify-center gap-2">
+                                {/* 🟢 زر تعديل بيانات الطالب الحالية */}
+                                <button
+                                  onClick={() => openEditStudentModal(s)}
+                                  className="p-1.5 bg-slate-100 text-slate-700 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer"
+                                  title="تعديل بيانات الطالب"
+                                >
+                                  <Edit className="w-4 h-4 text-[#006837]" />
+                                </button>
                                 <button
                                   onClick={() => setSelectedStudentReport(s)}
                                   className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-semibold text-xs flex items-center gap-1 transition-colors cursor-pointer"
@@ -1662,7 +1806,6 @@ export const TeacherDashboard: React.FC = () => {
                 </form>
               </div>
 
-              {/* 🟢 كارت تسجيل الطلاب الفردي والجماعي المُحدّث */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex items-center justify-between font-bold text-slate-800 text-lg mb-3">
                   <div className="flex items-center gap-2">
@@ -1671,7 +1814,6 @@ export const TeacherDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                {/* شريط خيارات الإضافة (فردي / لصق Excel / ملف CSV) */}
                 <div className="flex gap-1 bg-slate-100 p-1 rounded-xl mb-4 text-xs font-bold">
                   <button
                     type="button"
@@ -1708,7 +1850,6 @@ export const TeacherDashboard: React.FC = () => {
                   </button>
                 </div>
 
-                {/* 1. نموذج الإضافة الفردية */}
                 {studentAddMode === 'single' && (
                   <form onSubmit={handleAddStudent} className="space-y-3">
                     <input
@@ -1755,7 +1896,6 @@ export const TeacherDashboard: React.FC = () => {
                   </form>
                 )}
 
-                {/* 2. نموذج الإضافة باللصق المباشر */}
                 {studentAddMode === 'paste' && (
                   <form onSubmit={handleBulkAddPaste} className="space-y-3">
                     <select
@@ -1771,13 +1911,13 @@ export const TeacherDashboard: React.FC = () => {
                     </select>
                     <div className="space-y-1">
                       <label className="text-[11px] text-slate-500 font-bold">
-                        انسخ الأعمدة من Excel: (الاسم [Tab] رقم الهوية [Tab] رقم الجوال)
+                        الصق قائمة الأسماء مع أرقام الهويات والجوالات مباشر:
                       </label>
                       <textarea
                         rows={5}
                         value={bulkTextData}
                         onChange={(e) => setBulkTextData(e.target.value)}
-                        placeholder={`محمد علي القحطاني\t1098765432\t0501234567\nسعد عبدالله الشمراني\t1012345678\t0559876543`}
+                        placeholder={`انس بن سعيد الأحمري 1181899145\nتركي عبدالله الأحمري 1184330239`}
                         className="w-full p-2.5 border rounded-xl outline-none focus:ring-2 focus:ring-[#006837] text-xs font-mono leading-relaxed"
                         required
                       />
@@ -1792,7 +1932,6 @@ export const TeacherDashboard: React.FC = () => {
                   </form>
                 )}
 
-                {/* 3. نموذج الاستيراد من ملف Excel/CSV */}
                 {studentAddMode === 'file' && (
                   <form onSubmit={handleBulkAddFile} className="space-y-3">
                     <select

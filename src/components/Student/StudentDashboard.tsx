@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
 import type { Activity, Student, Submission } from '../../types';
-import { Check, X, Type, Send, Trash2, CheckCircle, Clock, FileText, ArrowRight } from 'lucide-react';
+import { Check, X, Type, Send, Trash2, CheckCircle, Clock, FileText, ArrowRight, AlertCircle } from 'lucide-react';
 
 interface StudentViewProps {
   student: Student;
   activity: Activity;
+  existingSubmission?: Submission;
   onSuccessSubmission?: () => void;
   onBack?: () => void;
 }
@@ -18,17 +19,30 @@ interface Annotation {
   text?: string;
 }
 
-export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onSuccessSubmission, onBack }) => {
+export const StudentView: React.FC<StudentViewProps> = ({ student, activity, existingSubmission, onSuccessSubmission, onBack }) => {
   const [selectedTool, setSelectedTool] = useState<'check' | 'cross' | 'text'>('check');
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [annotations, setAnnotations] = useState<Annotation[]>(() => {
+    if (existingSubmission && Array.isArray(existingSubmission.answers_data)) {
+      return existingSubmission.answers_data as Annotation[];
+    }
+    return [];
+  });
   const [textInput, setTextInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(!!existingSubmission);
   
   const sheetRef = useRef<HTMLDivElement>(null);
 
+  // التحقق المباشر من حالة المهلة الزمنية
+  const now = new Date().getTime();
+  const startTime = new Date(activity.start_time).getTime();
+  const endTime = new Date(activity.end_time).getTime();
+  const isExpired = now > endTime;
+  const isNotStarted = now < startTime;
+
   const handleSheetClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!sheetRef.current || submitted) return;
+    // منع إضافة أي علامات إذا انتهت المهلة أو تم التسليم أو لم يبدأ الوقت
+    if (!sheetRef.current || submitted || isExpired || isNotStarted) return;
 
     const rect = sheetRef.current.getBoundingClientRect();
     const xPct = Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(2));
@@ -53,10 +67,16 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
 
   const handleRemoveAnnotation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (submitted || isExpired) return;
     setAnnotations(annotations.filter((a) => a.id !== id));
   };
 
   const handleSubmitAnswers = async () => {
+    if (isExpired) {
+      alert('عذراً، انتهت المهلة الزمنية المحددة للنشاط ولا يمكنك تسليم الحل الآن.');
+      return;
+    }
+
     if (annotations.length === 0) {
       if (!window.confirm('لم تقم بإضافة أي إجابات أو علامات على الورقة. هل أنت متأكد من التسليم؟')) {
         return;
@@ -65,24 +85,30 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
 
     setSubmitting(true);
 
-    const { error } = await supabase.from('submissions').insert([
-      {
-        student_id: student.id,
-        activity_id: activity.id,
-        answers_data: annotations,
-        score: null,
-        max_score: 10,
-        submitted_at: new Date().toISOString(),
-      },
-    ]);
+    // استخدام upsert لمنع خطأ duplicate key والتحديث المباشر للإجابة
+    const { error } = await supabase.from('submissions').upsert(
+      [
+        {
+          ...(existingSubmission?.id ? { id: existingSubmission.id } : {}),
+          student_id: student.id,
+          activity_id: activity.id,
+          answers_data: annotations,
+          score: existingSubmission?.score ?? null,
+          max_score: (existingSubmission as any)?.max_score ?? 10,
+          submitted_at: new Date().toISOString(),
+        },
+      ],
+      { onConflict: 'student_id,activity_id' }
+    );
 
     setSubmitting(false);
 
     if (error) {
       console.error('Supabase Error Details:', error);
-      alert(`حدث خطأ أثناء إرسال الحل: ${error.message || 'يرجى التحقق من صلاحيات الجدول في Supabase'}`);
+      alert(`حدث خطأ أثناء إرسال الحل: ${error.message}`);
     } else {
       setSubmitted(true);
+      alert('تم تسليم ورقة الحل بنجاح!');
       if (onSuccessSubmission) onSuccessSubmission();
     }
   };
@@ -98,7 +124,18 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
         </button>
       )}
 
-      {!submitted ? (
+      {/* التنبيه بحالة الوقت والأدوات */}
+      {isExpired ? (
+        <div className="bg-rose-50 border-2 border-rose-400 text-rose-800 p-4 rounded-2xl flex items-center gap-3 font-bold text-sm">
+          <AlertCircle className="w-6 h-6 text-rose-600" />
+          <span>⏰ انتهت المهلة الزمنية المتاحة لحل هذا النشاط بتوقيت أم القرى. (عرض ورقة الإجابة فقط)</span>
+        </div>
+      ) : isNotStarted ? (
+        <div className="bg-blue-50 border-2 border-blue-400 text-blue-800 p-4 rounded-2xl flex items-center gap-3 font-bold text-sm">
+          <Clock className="w-6 h-6 text-blue-600" />
+          <span>⏳ لم يبدأ وقت هذا النشاط بعد. يرجى الانتظار حتى حلول موعد البداية.</span>
+        </div>
+      ) : !submitted ? (
         <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 space-y-3 sticky top-2 z-30">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
@@ -169,11 +206,14 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
         </div>
       )}
 
+      {/* ورقة العمل التفاعلية */}
       <div className="flex justify-center bg-slate-800 p-4 rounded-2xl shadow-inner overflow-auto">
         <div
           ref={sheetRef}
           onClick={handleSheetClick}
-          className="relative bg-white rounded shadow-2xl overflow-hidden cursor-crosshair min-w-[750px] h-[1050px] select-none"
+          className={`relative bg-white rounded shadow-2xl overflow-hidden min-w-[750px] h-[1050px] select-none ${
+            submitted || isExpired || isNotStarted ? 'cursor-default' : 'cursor-crosshair'
+          }`}
         >
           <iframe
             src={`${activity.pdf_url}#toolbar=0&navpanes=0`}
@@ -191,7 +231,7 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
                 {ann.type === 'text' && (
                   <div className="bg-blue-100/95 text-blue-900 font-black text-xs px-2.5 py-1 rounded border-2 border-blue-600 shadow-md flex items-center gap-1 whitespace-nowrap">
                     <span>{ann.text}</span>
-                    {!submitted && (
+                    {!submitted && !isExpired && (
                       <button
                         onClick={(e) => handleRemoveAnnotation(ann.id, e)}
                         className="p-0.5 hover:bg-rose-200 text-rose-700 rounded transition-colors"
@@ -205,7 +245,7 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
                 {ann.type === 'check' && (
                   <div className="flex items-center justify-center bg-emerald-500 text-white border-2 border-white font-black rounded-full w-7 h-7 shadow-lg relative">
                     ✓
-                    {!submitted && (
+                    {!submitted && !isExpired && (
                       <button
                         onClick={(e) => handleRemoveAnnotation(ann.id, e)}
                         className="absolute -top-2 -right-2 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -219,7 +259,7 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
                 {ann.type === 'cross' && (
                   <div className="flex items-center justify-center bg-rose-500 text-white border-2 border-white font-black rounded-full w-7 h-7 shadow-lg relative">
                     ✕
-                    {!submitted && (
+                    {!submitted && !isExpired && (
                       <button
                         onClick={(e) => handleRemoveAnnotation(ann.id, e)}
                         className="absolute -top-2 -right-2 bg-rose-600 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -267,10 +307,12 @@ export const StudentDashboard: React.FC<{ student: Student }> = ({ student }) =>
   };
 
   if (selectedActivity) {
+    const sub = submissions.find((s) => s.activity_id === selectedActivity.id);
     return (
       <StudentView
         student={student}
         activity={selectedActivity}
+        existingSubmission={sub}
         onBack={() => {
           setSelectedActivity(null);
           fetchStudentData();

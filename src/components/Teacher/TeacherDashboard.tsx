@@ -552,9 +552,15 @@ export const TeacherDashboard: React.FC = () => {
 
   const currentAnalytics = calculateGradeAnalytics(selectedClass);
 
+  // فرز الأنشطة أبجدياً بحسب العنوان لاستخدامها في العرض
+  const sortedActivities = [...activities].sort((a, b) => 
+    a.title.localeCompare(b.title, 'ar')
+  );
+
   const fullGradingList: { student: Student; activity: Activity; submission?: Submission }[] = [];
   filteredStudents.forEach((st) => {
-    const classActs = activities.filter((a) => a.class_id === st.class_id);
+    // ترتيب الأنشطة أبجدياً داخل قائمة التقييم الشامل
+    const classActs = sortedActivities.filter((a) => a.class_id === st.class_id);
     classActs.forEach((act) => {
       const sub = submissions.find((s) => s.student_id === st.id && s.activity_id === act.id);
       fullGradingList.push({ student: st, activity: act, submission: sub });
@@ -933,7 +939,7 @@ export const TeacherDashboard: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {activities
+                    {sortedActivities
                       .filter((a) => a.class_id === selectedStudentReport.class_id)
                       .map((act, i) => {
                         const sub = submissions.find(
@@ -1410,9 +1416,9 @@ export const TeacherDashboard: React.FC = () => {
             <div className="p-6 border-b border-slate-100 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <h3 className="font-bold text-slate-800 text-xl flex items-center gap-2">
-                  <FileUp className="w-5 h-5 text-[#006837]" /> إدارة الأنشطة والواجبات المنشورة ({activities.length})
+                  <FileUp className="w-5 h-5 text-[#006837]" /> إدارة الأنشطة والواجبات المنشورة ({sortedActivities.length})
                 </h3>
-                {activities.length > 0 && (
+                {sortedActivities.length > 0 && (
                   <button
                     onClick={handleDeleteAllActivities}
                     className="px-3 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-xs font-extrabold flex items-center gap-1 transition-colors cursor-pointer"
@@ -1435,12 +1441,12 @@ export const TeacherDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm font-semibold">
-                  {activities.length === 0 ? (
+                  {sortedActivities.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="p-8 text-center text-slate-400">لا توجد أنشطة منشورة حتى الآن</td>
                     </tr>
                   ) : (
-                    activities.map((act) => {
+                    sortedActivities.map((act) => {
                       const timeStatus = getActivityTimeStatus(act.end_time);
                       return (
                         <tr key={act.id} className="hover:bg-slate-50 transition-colors">

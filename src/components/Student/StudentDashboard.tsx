@@ -1,23 +1,24 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../../lib/supabase';
-import type { Activity, Student } from '../../types';
-import { Check, X, Type, Send, Trash2, CheckCircle } from 'lucide-react';
+import type { Activity, Student, Submission } from '../../types';
+import { Check, X, Type, Send, Trash2, CheckCircle, Clock, FileText, ArrowRight } from 'lucide-react';
 
 interface StudentViewProps {
   student: Student;
   activity: Activity;
   onSuccessSubmission?: () => void;
+  onBack?: () => void;
 }
 
 interface Annotation {
   id: string;
   type: 'check' | 'cross' | 'text';
-  x: number; // نسبة مئوية %
-  y: number; // نسبة مئوية %
+  x: number;
+  y: number;
   text?: string;
 }
 
-export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onSuccessSubmission }) => {
+export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onSuccessSubmission, onBack }) => {
   const [selectedTool, setSelectedTool] = useState<'check' | 'cross' | 'text'>('check');
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [textInput, setTextInput] = useState('');
@@ -26,12 +27,10 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
   
   const sheetRef = useRef<HTMLDivElement>(null);
 
-  // إضافة علامة أو نص فوق ورقة العمل عند ضغط الطالب
   const handleSheetClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!sheetRef.current || submitted) return;
 
     const rect = sheetRef.current.getBoundingClientRect();
-    // حساب موقع الضغطة كنسبة مئوية لضمان المطابقة على لوحة المعلم
     const xPct = Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(2));
     const yPct = Number((((e.clientY - rect.top) / rect.height) * 100).toFixed(2));
 
@@ -52,13 +51,11 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
     if (selectedTool === 'text') setTextInput('');
   };
 
-  // حذف علامة محددة
   const handleRemoveAnnotation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setAnnotations(annotations.filter((a) => a.id !== id));
   };
 
-  // إرسال الإجابات والتسليم لقاعدة البيانات
   const handleSubmitAnswers = async () => {
     if (annotations.length === 0) {
       if (!window.confirm('لم تقم بإضافة أي إجابات أو علامات على الورقة. هل أنت متأكد من التسليم؟')) {
@@ -89,7 +86,15 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
 
   return (
     <div className="max-w-4xl mx-auto space-y-4 p-4 font-sans dir-rtl">
-      {/* شريط أدوات الحل التفاعلي */}
+      {onBack && (
+        <button
+          onClick={onBack}
+          className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+        >
+          <ArrowRight className="w-4 h-4" /> العودة للأنشطة
+        </button>
+      )}
+
       {!submitted ? (
         <div className="bg-white p-4 rounded-2xl shadow-md border border-slate-200 space-y-3 sticky top-2 z-30">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -142,7 +147,6 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
             </button>
           </div>
 
-          {/* حقل إدخال النص عند اختيار الكتابة */}
           {selectedTool === 'text' && (
             <div className="flex gap-2 pt-1">
               <input
@@ -162,21 +166,18 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
         </div>
       )}
 
-      {/* ورقة العمل التفاعلية (PDF + Interactive Overlay) */}
       <div className="flex justify-center bg-slate-800 p-4 rounded-2xl shadow-inner overflow-auto">
         <div
           ref={sheetRef}
           onClick={handleSheetClick}
           className="relative bg-white rounded shadow-2xl overflow-hidden cursor-crosshair min-w-[750px] h-[1050px] select-none"
         >
-          {/* خلفية الورقة (PDF) */}
           <iframe
             src={`${activity.pdf_url}#toolbar=0&navpanes=0`}
             title="Interactive PDF Sheet"
             className="w-full h-full border-none pointer-events-none"
           />
 
-          {/* طبقة العلامات والحلول التفاعلية */}
           <div className="absolute inset-0 pointer-events-auto">
             {annotations.map((ann) => (
               <div
@@ -234,16 +235,123 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
   );
 };
 
-// تصدير مكون لوحة الطالب بالتوازي لتوافقه مع App.tsx
 export const StudentDashboard: React.FC<{ student: Student }> = ({ student }) => {
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchStudentData();
+  }, [student]);
+
+  const fetchStudentData = async () => {
+    setLoading(true);
+    const { data: actData } = await supabase
+      .from('activities')
+      .select('*')
+      .eq('class_id', student.class_id)
+      .order('created_at', { ascending: false });
+
+    const { data: subData } = await supabase
+      .from('submissions')
+      .select('*')
+      .eq('student_id', student.id);
+
+    if (actData) setActivities(actData);
+    if (subData) setSubmissions(subData);
+    setLoading(false);
+  };
+
+  if (selectedActivity) {
+    return (
+      <StudentView
+        student={student}
+        activity={selectedActivity}
+        onBack={() => {
+          setSelectedActivity(null);
+          fetchStudentData();
+        }}
+        onSuccessSubmission={() => fetchStudentData()}
+      />
+    );
+  }
+
   return (
-    <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-4xl mx-auto my-6">
-      <h2 className="text-[#006837] font-extrabold text-xl mb-2">
-        أهلاً بك الطالب: {student.full_name}
-      </h2>
-      <p className="font-bold text-slate-600 text-sm">
-        يرجى اختيار النشاط أو الواجب المتاح للبدء في الإجابة التفاعلية مباشرة على ورقة العمل.
-      </p>
+    <div className="max-w-4xl mx-auto space-y-6 p-4 font-sans dir-rtl">
+      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h2 className="text-[#006837] font-extrabold text-xl mb-1">
+          أهلاً بك الطالب: {student.full_name}
+        </h2>
+        <p className="font-bold text-slate-500 text-xs">
+          الصف الدراسي: {student.classes?.name || 'غير محدد'}
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <h3 className="font-extrabold text-slate-800 text-lg flex items-center gap-2">
+          <FileText className="w-5 h-5 text-[#006837]" /> الأنشطة والواجبات المتاحة
+        </h3>
+
+        {loading ? (
+          <div className="text-center p-8 bg-white rounded-2xl border text-slate-500 font-bold text-sm">
+            جاري تحميل الأنشطة...
+          </div>
+        ) : activities.length === 0 ? (
+          <div className="text-center p-8 bg-white rounded-2xl border text-slate-400 font-bold text-sm">
+            لا توجد أنشطة مطروحة لصفك الدراسي حالياً.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {activities.map((act) => {
+              const sub = submissions.find((s) => s.activity_id === act.id);
+              const isExpired = new Date().getTime() > new Date(act.end_time).getTime();
+              const isSubmitted = !!sub;
+
+              return (
+                <div key={act.id} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
+                  <div className="flex justify-between items-start">
+                    <h4 className="font-extrabold text-slate-800 text-base">{act.title}</h4>
+                    {isSubmitted ? (
+                      <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-lg text-xs font-extrabold inline-flex items-center gap-1">
+                        <CheckCircle className="w-3.5 h-3.5" /> تم التسليم
+                      </span>
+                    ) : isExpired ? (
+                      <span className="px-2.5 py-1 bg-rose-100 text-rose-800 rounded-lg text-xs font-extrabold inline-flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" /> انتهى الموعد
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 bg-amber-100 text-amber-800 rounded-lg text-xs font-extrabold inline-flex items-center gap-1">
+                        <Clock className="w-3.5 h-3.5" /> متاح للحل
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="text-xs text-slate-500 font-mono space-y-1">
+                    <p>ينتهي في: {new Date(act.end_time).toLocaleString('ar-SA')}</p>
+                    {sub?.score !== null && sub?.score !== undefined && (
+                      <p className="text-[#006837] font-black text-sm pt-1">الدرجة المكتسبة: {sub.score} / {(sub as any).max_score || 10}</p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => setSelectedActivity(act)}
+                    className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      isSubmitted
+                        ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                        : isExpired
+                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                        : 'bg-[#006837] text-white hover:bg-[#00522b] shadow-md'
+                    }`}
+                  >
+                    {isSubmitted ? 'استعراض الإجابات' : isExpired ? 'انتهت فترة الحل' : 'بدء حل ورقة العمل التفاعلية'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 };

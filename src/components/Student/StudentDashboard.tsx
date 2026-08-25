@@ -65,11 +65,14 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
 
     setSubmitting(true);
 
+    // إرسال البيانات مع تحديد القيم الأساسية بوضوح لمنع أخطاء Supabase
     const { error } = await supabase.from('submissions').insert([
       {
         student_id: student.id,
         activity_id: activity.id,
         answers_data: annotations,
+        score: null,
+        max_score: 10,
         submitted_at: new Date().toISOString(),
       },
     ]);
@@ -77,7 +80,8 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
     setSubmitting(false);
 
     if (error) {
-      alert('حدث خطأ أثناء إرسال الحل، يرجى المحاولة مرة أخرى.');
+      console.error('Supabase Error Details:', error);
+      alert(`حدث خطأ أثناء إرسال الحل: ${error.message || 'يرجى التحقق من صلاحيات الجدول في Supabase'}`);
     } else {
       setSubmitted(true);
       if (onSuccessSubmission) onSuccessSubmission();

@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { supabase } from '../lib/supabase';
-import type { Activity, Student } from '../types';
-import { Check, X, Type, Send, Trash2, FileText, CheckCircle } from 'lucide-react';
+import { supabase } from '../../lib/supabase';
+import type { Activity, Student } from '../../types';
+import { Check, X, Type, Send, Trash2, CheckCircle } from 'lucide-react';
 
 interface StudentViewProps {
   student: Student;
@@ -31,7 +31,7 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
     if (!sheetRef.current || submitted) return;
 
     const rect = sheetRef.current.getBoundingClientRect();
-    // حساب الموقع كنسبة مئوية دقيقة لضمان التطابق على جميع الشاشات
+    // حساب موقع الضغطة كنسبة مئوية لضمان المطابقة على لوحة المعلم
     const xPct = Number((((e.clientX - rect.left) / rect.width) * 100).toFixed(2));
     const yPct = Number((((e.clientY - rect.top) / rect.height) * 100).toFixed(2));
 
@@ -52,13 +52,13 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
     if (selectedTool === 'text') setTextInput('');
   };
 
-  // حذف علامة معينة
+  // حذف علامة محددة
   const handleRemoveAnnotation = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setAnnotations(annotations.filter((a) => a.id !== id));
   };
 
-  // إرسال الإجابات والتسليم
+  // إرسال الإجابات والتسليم لقاعدة البيانات
   const handleSubmitAnswers = async () => {
     if (annotations.length === 0) {
       if (!window.confirm('لم تقم بإضافة أي إجابات أو علامات على الورقة. هل أنت متأكد من التسليم؟')) {
@@ -72,7 +72,7 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
       {
         student_id: student.id,
         activity_id: activity.id,
-        answers_data: annotations, // إرسال الإحداثيات النسبية والعلامات
+        answers_data: annotations,
         submitted_at: new Date().toISOString(),
       },
     ]);
@@ -142,7 +142,7 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
             </button>
           </div>
 
-          {/* حقل إدخال النص عند اختيار كتابة إجابة */}
+          {/* حقل إدخال النص عند اختيار الكتابة */}
           {selectedTool === 'text' && (
             <div className="flex gap-2 pt-1">
               <input
@@ -176,7 +176,7 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
             className="w-full h-full border-none pointer-events-none"
           />
 
-          {/* طبقة الإجابات والعلامات التفاعلية */}
+          {/* طبقة العلامات والحلول التفاعلية */}
           <div className="absolute inset-0 pointer-events-auto">
             {annotations.map((ann) => (
               <div
@@ -230,6 +230,20 @@ export const StudentView: React.FC<StudentViewProps> = ({ student, activity, onS
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// تصدير مكون لوحة الطالب بالتوازي لتوافقه مع App.tsx
+export const StudentDashboard: React.FC<{ student: Student }> = ({ student }) => {
+  return (
+    <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-sm max-w-4xl mx-auto my-6">
+      <h2 className="text-[#006837] font-extrabold text-xl mb-2">
+        أهلاً بك الطالب: {student.full_name}
+      </h2>
+      <p className="font-bold text-slate-600 text-sm">
+        يرجى اختيار النشاط أو الواجب المتاح للبدء في الإجابة التفاعلية مباشرة على ورقة العمل.
+      </p>
     </div>
   );
 };
